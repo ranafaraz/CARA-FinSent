@@ -1,0 +1,28 @@
+project_name: CARA-FinSent
+labels: [negative, neutral, positive]
+primary_dataset: Financial PhraseBank
+external_validation_dataset: FiQA
+recommended_metrics:
+  - accuracy
+  - macro_f1
+  - weighted_f1
+  - mcc
+  - cohen_kappa
+  - ece_10_bins
+  - brier_score
+  - abstention_curve
+classical_models:
+  - majority_baseline
+  - logistic_regression
+  - linear_svm
+  - sgd_log_loss
+  - multinomial_nb
+  - random_forest
+  - xgboost
+transformer_models:
+  - ProsusAI/finbert
+retrieval:
+  top_k: 3
+  retriever: tfidf
+calibration:
+  method: sigmoid
