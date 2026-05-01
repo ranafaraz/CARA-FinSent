@@ -1,18 +1,8 @@
 #!/usr/bin/env python3
-"""
-11_run_finbert_improved_v2.py
----
-Improved FinBERT with key enhancements:
-- Confidence score computation for uncertainty estimation
-- Integrated uncertainty flags from SemEval data
-- Documentation of future improvements (agreement weighting,  synthetic negatives)
-- Same evaluation interface as baseline but with more diagnostics
-
-Usage:
-    python scripts/11_run_finbert_improved_v2.py --seed 42 --epochs 3 --batch_size 8
-"""
+"""Improved FinBERT baseline with confidence diagnostics on controlled gold splits."""
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -31,7 +21,7 @@ if _hf_token:
     try:
         from huggingface_hub import login as _hf_login
         _hf_login(token=_hf_token, add_to_git_credential=False)
-        print(f'[INFO] HuggingFace authenticated via HF_TOKEN')
+        print('[INFO] HuggingFace authenticated via HF_TOKEN')
     except Exception as _e:
         print(f'[WARN] HF login failed: {_e}')
 
@@ -46,31 +36,25 @@ from datasets import Dataset
 from sklearn.metrics import accuracy_score, f1_score, matthews_corrcoef
 from transformers import AutoModelForSequenceClassification, AutoTokenizer, EarlyStoppingCallback, Trainer, TrainingArguments
 
-from cara_finsent.data_utils import STANDARD_LABELS, apply_max_rows, decode_labels, load_standardized_csv, set_global_seeds, split_dataframe
-from cara_finsent.io_utils import save_dataframe, save_json, timestamp, write_manifest
+from cara_finsent.data_utils import (
+    STANDARD_LABELS,
+    auto_detect_gold_split,
+    infer_dataset_name,
+    load_gold_split,
+    set_global_seeds,
+    split_label_distribution,
+    text_hash_leakage_count,
+)
+from cara_finsent.io_utils import git_commit_sha, save_dataframe, save_json, timestamp, write_manifest
+from cara_finsent.label_mapping import canonical_label, encode_labels_for_model, model_label_remap, remap_probs
 from cara_finsent.metrics import classwise_metrics, confusion_matrix_df, metrics_with_optional_proba
 from cara_finsent.plotting import save_confusion_matrix_plot
-
-LABEL2ID = {label: i for i, label in enumerate(STANDARD_LABELS)}
-ID2LABEL = {i: label for label, i in LABEL2ID.items()}
-
-
-def compute_metrics(eval_pred):
-    logits, labels = eval_pred
-    preds = np.argmax(logits, axis=1)
-    y_true = decode_labels(labels)
-    y_pred = decode_labels(preds)
-    return {
-        'accuracy': accuracy_score(y_true, y_pred),
-        'macro_f1': f1_score(y_true, y_pred, average='macro', zero_division=0),
-        'weighted_f1': f1_score(y_true, y_pred, average='weighted', zero_division=0),
-        'mcc': matthews_corrcoef(y_true, y_pred),
-    }
 
 
 def main():
     parser = argparse.ArgumentParser(description='Improved FinBERT with confidence scoring.')
-    parser.add_argument('--data', default=None, help='Standardized CSV.')
+    parser.add_argument('--data', default=None, help='Controlled gold split CSV.')
+    parser.add_argument('--dataset_name', default=None, choices=['phrasebank', 'fiqa'])
     parser.add_argument('--text_col', default=None)
     parser.add_argument('--label_col', default=None)
     parser.add_argument('--model_name', default='ProsusAI/finbert')
@@ -90,19 +74,31 @@ def main():
     args = parser.parse_args()
 
     set_global_seeds(args.seed, enable_deep_learning=True)
+    dataset_name = args.dataset_name or infer_dataset_name(args.data)
     if not args.data:
-        from cara_finsent.data_utils import auto_detect_data
-        args.data = str(auto_detect_data())
+        if dataset_name == 'unknown':
+            raise SystemExit('Provide --dataset_name when --data is omitted. Allowed values: phrasebank, fiqa.')
+        args.data = str(auto_detect_gold_split(dataset_name))
         print(f'[AUTO] data = {args.data}')
+    if dataset_name == 'unknown':
+        dataset_name = infer_dataset_name(args.data)
+    if dataset_name == 'unknown':
+        raise SystemExit('Could not infer dataset_name from --data. Pass --dataset_name explicitly.')
     
     has_cuda = torch.cuda.is_available()
     use_fp16 = args.fp16 if args.fp16 else has_cuda
     print(f'[INFO] device={torch.cuda.get_device_name(0) if has_cuda else "cpu"} seed={args.seed}')
 
     ts = timestamp()
-    df = load_standardized_csv(args.data, args.text_col, args.label_col)
-    df = apply_max_rows(df, args.max_rows, seed=args.seed)
-    train_df, val_df, test_df = split_dataframe(df, seed=args.seed)
+    train_df, val_df, test_df = load_gold_split(args.data)
+    if args.max_rows:
+        print('[WARN] --max_rows is ignored for controlled gold split inputs.')
+
+    split_source = 'controlled_gold_split'
+    benchmark_mode = f'{dataset_name}_in_domain'
+    label_dist = split_label_distribution(train_df, val_df, test_df)
+    leakage_count = text_hash_leakage_count(train_df, val_df, test_df)
+    git_sha = git_commit_sha(PROJECT_ROOT)
 
     print(f'[INFO] train/val/test: {len(train_df)}/{len(val_df)}/{len(test_df)}')
     
@@ -117,15 +113,35 @@ def main():
         print(f'[INFO] Mean agreement level: {agreement_mean:.2f}')
 
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+    model = AutoModelForSequenceClassification.from_pretrained(args.model_name)
+    native_id2label = {int(k): str(v) for k, v in dict(model.config.id2label).items()}
+    canonical_remap = model_label_remap(native_id2label)
+    print(f'[INFO] Native id2label: {native_id2label}')
+    print(f'[INFO] Canonical remap: {canonical_remap}')
+
+    def compute_metrics(eval_pred):
+        logits, labels = eval_pred
+        probs_native = torch.softmax(torch.tensor(logits), dim=1).numpy()
+        probs_canon = remap_probs(probs_native, native_id2label)
+        y_pred = [STANDARD_LABELS[int(i)] for i in probs_canon.argmax(axis=1)]
+        y_true = [canonical_label(native_id2label[int(i)]) for i in labels]
+        return {
+            'accuracy': accuracy_score(y_true, y_pred),
+            'macro_f1': f1_score(y_true, y_pred, average='macro', zero_division=0),
+            'weighted_f1': f1_score(y_true, y_pred, average='weighted', zero_division=0),
+            'mcc': matthews_corrcoef(y_true, y_pred),
+        }
 
     def tokenize(examples):
         return tokenizer(examples['text'], max_length=args.max_length, truncation=True, padding='max_length')
 
-    # Encode labels
-    mapping = {label: i for i, label in enumerate(STANDARD_LABELS)}
-    train_df['label_id'] = train_df['label'].map(mapping)
-    val_df['label_id'] = val_df['label'].map(mapping)
-    test_df['label_id'] = test_df['label'].map(mapping)
+    # Encode labels in the model native order so config.id2label remains truthful.
+    train_df = train_df.copy()
+    val_df = val_df.copy()
+    test_df = test_df.copy()
+    train_df['label_id'] = encode_labels_for_model(train_df['label'], native_id2label)
+    val_df['label_id'] = encode_labels_for_model(val_df['label'], native_id2label)
+    test_df['label_id'] = encode_labels_for_model(test_df['label'], native_id2label)
 
     train_ds = Dataset.from_pandas(train_df[['text', 'label_id']]).map(tokenize, batched=True, remove_columns=['text'])
     train_ds = train_ds.rename_column('label_id', 'labels')
@@ -133,8 +149,6 @@ def main():
     val_ds = val_ds.rename_column('label_id', 'labels')
     test_ds = Dataset.from_pandas(test_df[['text', 'label_id']]).map(tokenize, batched=True, remove_columns=['text'])
     test_ds = test_ds.rename_column('label_id', 'labels')
-
-    model = AutoModelForSequenceClassification.from_pretrained(args.model_name, num_labels=len(STANDARD_LABELS), id2label=ID2LABEL, label2id=LABEL2ID, ignore_mismatched_sizes=True)
 
     out_dir = f'{args.models_dir}/finbert_{ts}'
     training_kwargs = dict(
@@ -172,10 +186,10 @@ def main():
     trainer.train()
     elapsed = time.perf_counter() - start
     pred_output = trainer.predict(test_ds)
-    logits = pred_output.predictions
-    probs = torch.softmax(torch.tensor(logits), dim=1).numpy()
+    probs_native = torch.softmax(torch.tensor(pred_output.predictions), dim=1).numpy()
+    probs = remap_probs(probs_native, native_id2label)
     pred_ids = probs.argmax(axis=1)
-    y_pred = decode_labels(pred_ids)
+    y_pred = [STANDARD_LABELS[int(i)] for i in pred_ids]
     y_true = test_df['label'].values
 
     # Compute confidence scores and abstention metrics
@@ -183,11 +197,23 @@ def main():
     entropy = -(probs * np.log(probs + 1e-10)).sum(axis=1)  # Shannon entropy of predictions
     
     summary = metrics_with_optional_proba(y_true, y_pred, probs, model_name=f'finbert_{args.model_name}')
+    summary['dataset_name'] = dataset_name
+    summary['dataset_file'] = str(Path(args.data))
+    summary['split_source'] = split_source
+    summary['benchmark_mode'] = benchmark_mode
     summary['train_plus_infer_seconds'] = elapsed
     summary['train_rows'] = len(train_df)
+    summary['val_rows'] = len(val_df)
     summary['test_rows'] = len(test_df)
     summary['seed'] = args.seed
     summary['device'] = 'cuda' if has_cuda else 'cpu'
+    summary['native_id2label'] = json.dumps(native_id2label, sort_keys=True)
+    summary['canonical_remap'] = json.dumps(canonical_remap)
+    summary['label_distribution_train'] = json.dumps(label_dist['train'], sort_keys=True)
+    summary['label_distribution_val'] = json.dumps(label_dist['val'], sort_keys=True)
+    summary['label_distribution_test'] = json.dumps(label_dist['test'], sort_keys=True)
+    summary['text_hash_leakage_count'] = leakage_count
+    summary['git_commit_sha'] = git_sha
     summary['mean_confidence'] = float(confidence.mean())
     summary['mean_entropy'] = float(entropy.mean())
     summary_path = save_dataframe(pd.DataFrame([summary]), args.results_dir, 'finbert_improved_summary', ts)
@@ -201,6 +227,8 @@ def main():
 
     # Save predictions with confidence scores
     pred_df = test_df[['id', 'text', 'label']].copy()
+    pred_df['dataset_name'] = dataset_name
+    pred_df['split_source'] = split_source
     pred_df['prediction'] = y_pred
     pred_df['confidence'] = confidence
     pred_df['entropy'] = entropy
@@ -209,7 +237,7 @@ def main():
     ABSTAIN_THRESHOLD = 0.60
     pred_df['abstain'] = confidence < ABSTAIN_THRESHOLD
     
-    for i, cls in ID2LABEL.items():
+    for i, cls in enumerate(STANDARD_LABELS):
         pred_df[f'proba_{cls}'] = probs[:, i]
     
     # Compute accuracy on non-abstained predictions
@@ -227,8 +255,46 @@ def main():
     cw_path = save_dataframe(classwise_metrics(y_true, y_pred), args.results_dir, 'finbert_classwise_metrics', ts)
     fig_path = f'{args.figures_dir}/finbert_confusion_matrix_{ts}.png'
     save_confusion_matrix_plot(cm, fig_path, title='FinBERT Confusion Matrix')
-    metrics_path = save_json(pred_output.metrics, args.results_dir, 'finbert_trainer_metrics', ts)
-    manifest = write_manifest(args.results_dir, 'finbert_improved', {'summary': str(summary_path), 'predictions': str(pred_path), 'confusion_matrix': str(cm_path), 'classwise': str(cw_path), 'trainer_metrics': str(metrics_path), 'figure': fig_path, 'model_dir': out_dir}, {'data': args.data}, ts)
+    metrics_path = save_json(
+        {
+            'trainer_metrics': pred_output.metrics,
+            'native_id2label': native_id2label,
+            'canonical_remap': canonical_remap,
+        },
+        args.results_dir,
+        'finbert_trainer_metrics',
+        ts,
+    )
+    manifest = write_manifest(
+        args.results_dir,
+        'finbert_improved',
+        {
+            'summary': str(summary_path),
+            'predictions': str(pred_path),
+            'confusion_matrix': str(cm_path),
+            'classwise': str(cw_path),
+            'trainer_metrics': str(metrics_path),
+            'figure': fig_path,
+            'model_dir': out_dir,
+        },
+        {
+            'dataset_name': dataset_name,
+            'dataset_file': str(Path(args.data)),
+            'split_source': split_source,
+            'benchmark_mode': benchmark_mode,
+            'train_rows': len(train_df),
+            'val_rows': len(val_df),
+            'test_rows': len(test_df),
+            'label_distribution': label_dist,
+            'text_hash_leakage_count': leakage_count,
+            'seed': args.seed,
+            'model_name': args.model_name,
+            'native_id2label': native_id2label,
+            'canonical_remap': canonical_remap,
+            'git_commit_sha': git_sha,
+        },
+        ts,
+    )
     
     print(pd.DataFrame([summary]))
     print(f'[DONE] Manifest -> {manifest}')

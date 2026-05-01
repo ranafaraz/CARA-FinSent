@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -18,8 +19,15 @@ from sklearn.naive_bayes import MultinomialNB
 from sklearn.pipeline import Pipeline
 from sklearn.svm import LinearSVC
 
-from cara_finsent.data_utils import apply_max_rows, load_standardized_csv, set_global_seeds, split_dataframe
-from cara_finsent.io_utils import save_dataframe, timestamp, write_manifest
+from cara_finsent.data_utils import (
+    auto_detect_gold_split,
+    infer_dataset_name,
+    load_gold_split,
+    set_global_seeds,
+    split_label_distribution,
+    text_hash_leakage_count,
+)
+from cara_finsent.io_utils import git_commit_sha, save_dataframe, timestamp, write_manifest
 from cara_finsent.metrics import classwise_metrics, confusion_matrix_df, metrics_with_optional_proba
 from cara_finsent.plotting import save_confusion_matrix_plot, save_metric_bar_plot
 
@@ -44,7 +52,8 @@ def get_models(include_xgboost: bool = True, seed: int = 42):
 
 def main():
     parser = argparse.ArgumentParser(description='Run classical TF-IDF baselines and save timestamped CSV results.')
-    parser.add_argument('--data', default=None, help='Standardized CSV. Auto-detected from data/processed/latest.csv if omitted.')
+    parser.add_argument('--data', default=None, help='Controlled gold split CSV. Auto-detected from data/processed/gold if omitted.')
+    parser.add_argument('--dataset_name', default=None, choices=['phrasebank', 'fiqa'])
     parser.add_argument('--text_col', default=None)
     parser.add_argument('--label_col', default=None)
     parser.add_argument('--max_rows', type=int, default=None)
@@ -59,25 +68,28 @@ def main():
     args = parser.parse_args()
 
     set_global_seeds(args.seed)
+    dataset_name = args.dataset_name or infer_dataset_name(args.data)
     if not args.data:
-        from cara_finsent.data_utils import auto_detect_data
-        args.data = str(auto_detect_data())
+        if dataset_name == 'unknown':
+            raise SystemExit('Provide --dataset_name when --data is omitted. Allowed values: phrasebank, fiqa.')
+        args.data = str(auto_detect_gold_split(dataset_name))
         print(f'[AUTO] data = {args.data}')
+    if dataset_name == 'unknown':
+        dataset_name = infer_dataset_name(args.data)
+    if dataset_name == 'unknown':
+        raise SystemExit('Could not infer dataset_name from --data. Pass --dataset_name explicitly.')
+
     ts = timestamp()
-    df = load_standardized_csv(args.data, args.text_col, args.label_col)
-    df = apply_max_rows(df, args.max_rows, seed=args.seed)
-    
-    # Check if pre-split column exists; if so, use it (Phase 1 controlled splits)
-    if 'split' in df.columns:
-        print(f'[INFO] Using pre-existing splits from {args.data}')
-        train_df = df[df['split'] == 'train'].reset_index(drop=True)
-        val_df = df[df['split'] == 'val'].reset_index(drop=True)
-        test_df = df[df['split'] == 'test'].reset_index(drop=True)
-        print(f'[INFO] Pre-split: train/val/test: {len(train_df)}/{len(val_df)}/{len(test_df)}')
-    else:
-        print(f'[INFO] No pre-split column; creating splits with seed={args.seed}')
-        train_df, val_df, test_df = split_dataframe(df, test_size=args.test_size, val_size=args.val_size, seed=args.seed)
-        print(f'[INFO] Created splits: train/val/test: {len(train_df)}/{len(val_df)}/{len(test_df)}')
+    train_df, val_df, test_df = load_gold_split(args.data)
+    if args.max_rows:
+        print('[WARN] --max_rows is ignored for controlled gold split inputs.')
+    print(f'[INFO] Controlled gold split: train/val/test = {len(train_df)}/{len(val_df)}/{len(test_df)}')
+
+    split_source = 'controlled_gold_split'
+    benchmark_mode = f'{dataset_name}_in_domain'
+    label_dist = split_label_distribution(train_df, val_df, test_df)
+    leakage_count = text_hash_leakage_count(train_df, val_df, test_df)
+    git_sha = git_commit_sha(PROJECT_ROOT)
 
     rows = []
     prediction_frames = []
@@ -103,14 +115,26 @@ def main():
             y_proba = pipe.predict_proba(test_df['text']) if hasattr(pipe, 'predict_proba') else None
         elapsed = time.perf_counter() - start
         metrics = metrics_with_optional_proba(test_df['label'].values, y_pred, y_proba, model_name=name)
+        metrics['dataset_name'] = dataset_name
+        metrics['dataset_file'] = str(Path(args.data))
+        metrics['split_source'] = split_source
+        metrics['benchmark_mode'] = benchmark_mode
         metrics['train_plus_infer_seconds'] = elapsed
         metrics['train_rows'] = len(train_df)
+        metrics['val_rows'] = len(val_df)
         metrics['test_rows'] = len(test_df)
+        metrics['label_distribution_train'] = json.dumps(label_dist['train'], sort_keys=True)
+        metrics['label_distribution_val'] = json.dumps(label_dist['val'], sort_keys=True)
+        metrics['label_distribution_test'] = json.dumps(label_dist['test'], sort_keys=True)
+        metrics['text_hash_leakage_count'] = leakage_count
         metrics['seed'] = args.seed
+        metrics['git_commit_sha'] = git_sha
         rows.append(metrics)
 
         pred_df = test_df[['id', 'text', 'label']].copy()
         pred_df['model'] = name
+        pred_df['dataset_name'] = dataset_name
+        pred_df['split_source'] = split_source
         pred_df['prediction'] = y_pred
         if y_proba is not None:
             if name == 'tfidf_xgboost':
@@ -140,7 +164,25 @@ def main():
     metric_plot = f'{args.figures_dir}/classical_baseline_macro_f1_{ts}.png'
     save_metric_bar_plot(results_df, 'macro_f1', metric_plot)
     output_files['macro_f1_plot'] = metric_plot
-    manifest = write_manifest(args.results_dir, 'classical_baselines', output_files, metadata={'data': args.data, 'rows': len(df)}, ts=ts)
+    manifest = write_manifest(
+        args.results_dir,
+        'classical_baselines',
+        output_files,
+        metadata={
+            'dataset_name': dataset_name,
+            'dataset_file': str(Path(args.data)),
+            'split_source': split_source,
+            'benchmark_mode': benchmark_mode,
+            'train_rows': len(train_df),
+            'val_rows': len(val_df),
+            'test_rows': len(test_df),
+            'label_distribution': label_dist,
+            'text_hash_leakage_count': leakage_count,
+            'seed': args.seed,
+            'git_commit_sha': git_sha,
+        },
+        ts=ts,
+    )
     print(results_df)
     print(f'[DONE] Summary -> {results_path}')
     print(f'[DONE] Manifest -> {manifest}')

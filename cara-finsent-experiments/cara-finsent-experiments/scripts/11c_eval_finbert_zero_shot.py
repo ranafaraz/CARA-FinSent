@@ -40,33 +40,36 @@ if _hf_token:
 os.environ.setdefault('HF_HUB_DISABLE_SYMLINKS_WARNING', '1')
 
 import argparse
+import json
 import numpy as np
 import pandas as pd
 import torch
 from datasets import Dataset
 from transformers import AutoModelForSequenceClassification, AutoTokenizer, Trainer, TrainingArguments
 
-from cara_finsent.data_utils import STANDARD_LABELS, decode_labels, load_standardized_csv, set_global_seeds, split_dataframe
-from cara_finsent.io_utils import save_dataframe, save_json, timestamp, write_manifest
+from cara_finsent.data_utils import (
+    STANDARD_LABELS,
+    auto_detect_gold_split,
+    infer_dataset_name,
+    load_gold_split,
+    set_global_seeds,
+    split_label_distribution,
+    text_hash_leakage_count,
+)
+from cara_finsent.io_utils import git_commit_sha, save_dataframe, save_json, timestamp, write_manifest
+from cara_finsent.label_mapping import model_label_remap, remap_probs
 from cara_finsent.metrics import classwise_metrics, confusion_matrix_df, metrics_with_optional_proba
 from cara_finsent.plotting import save_confusion_matrix_plot
 
-# ProsusAI/finbert native label order (pretrained)
-PROSUS_ID2LABEL = {0: 'positive', 1: 'negative', 2: 'neutral'}
-
-# Our standard label order
 STANDARD_LABEL2ID = {label: i for i, label in enumerate(STANDARD_LABELS)}
 STANDARD_ID2LABEL = {i: label for label, i in STANDARD_LABEL2ID.items()}
-
-# Remap: ProsusAI output index → STANDARD_LABELS index
-# prosus[0]=positive → standard[2], prosus[1]=negative → standard[0], prosus[2]=neutral → standard[1]
-PROSUS_TO_STANDARD = np.array([2, 0, 1])  # prosus_probs[:, [1,2,0]] gives [neg,neu,pos]
 
 
 def main():
     parser = argparse.ArgumentParser(description='Zero-shot evaluation of base ProsusAI/finbert.')
     parser.add_argument('--model_name', default='ProsusAI/finbert')
     parser.add_argument('--data', default=None)
+    parser.add_argument('--dataset_name', default=None, choices=['phrasebank', 'fiqa'])
     parser.add_argument('--text_col', default=None)
     parser.add_argument('--label_col', default=None)
     parser.add_argument('--max_length', type=int, default=128)
@@ -77,33 +80,40 @@ def main():
     args = parser.parse_args()
 
     set_global_seeds(args.seed, enable_deep_learning=True)
+    dataset_name = args.dataset_name or infer_dataset_name(args.data)
 
     if not args.data:
-        from cara_finsent.data_utils import auto_detect_data
-        args.data = str(auto_detect_data())
+        if dataset_name == 'unknown':
+            raise SystemExit('Provide --dataset_name when --data is omitted. Allowed values: phrasebank, fiqa.')
+        args.data = str(auto_detect_gold_split(dataset_name))
         print(f'[AUTO] data = {args.data}')
+    if dataset_name == 'unknown':
+        dataset_name = infer_dataset_name(args.data)
+    if dataset_name == 'unknown':
+        raise SystemExit('Could not infer dataset_name from --data. Pass --dataset_name explicitly.')
 
     has_cuda = torch.cuda.is_available()
     device = 'cuda' if has_cuda else 'cpu'
     print(f'[INFO] model={args.model_name}, device={device}, seed={args.seed}')
 
     ts = timestamp()
-    df = load_standardized_csv(args.data, args.text_col, args.label_col)
-    
-    # Check if pre-split column exists; if so, use it (Phase 1 controlled splits)
-    if 'split' in df.columns:
-        print(f'[INFO] Using pre-existing splits from {args.data}', flush=True)
-        test_df = df[df['split'] == 'test'].reset_index(drop=True)
-        print(f'[INFO] Pre-split test rows: {len(test_df)}', flush=True)
-    else:
-        print(f'[INFO] No pre-split column; creating splits with seed={args.seed}', flush=True)
-        _train_df, _val_df, test_df = split_dataframe(df, seed=args.seed)
-        print(f'[INFO] Test rows: {len(test_df)}')
+    train_df, val_df, test_df = load_gold_split(args.data)
+    print(f'[INFO] Using controlled gold split from {args.data}', flush=True)
+    print(f'[INFO] Pre-split rows: train={len(train_df)}, val={len(val_df)}, test={len(test_df)}', flush=True)
+
+    split_source = 'controlled_gold_split'
+    benchmark_mode = f'{dataset_name}_in_domain'
+    label_dist = split_label_distribution(train_df, val_df, test_df)
+    leakage_count = text_hash_leakage_count(train_df, val_df, test_df)
+    git_sha = git_commit_sha(PROJECT_ROOT)
 
     # Load base model with its ORIGINAL ProsusAI label mapping (no override)
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
     model = AutoModelForSequenceClassification.from_pretrained(args.model_name)
-    print(f'[INFO] Native id2label: {model.config.id2label}')
+    native_id2label = {int(k): str(v) for k, v in dict(model.config.id2label).items()}
+    canonical_remap = model_label_remap(native_id2label)
+    print(f'[INFO] Native id2label: {native_id2label}')
+    print(f'[INFO] Canonical remap: {canonical_remap}')
 
     def tokenize(examples):
         return tokenizer(examples['text'], max_length=args.max_length, truncation=True, padding='max_length')
@@ -128,28 +138,40 @@ def main():
     # Logits are in ProsusAI's native order: [positive, negative, neutral]
     logits = pred_output.predictions
     prosus_probs = torch.softmax(torch.tensor(logits), dim=1).numpy()
-
-    # Remap to STANDARD_LABELS order: [negative, neutral, positive]
-    # prosus_probs[:, 1] = P(negative), prosus_probs[:, 2] = P(neutral), prosus_probs[:, 0] = P(positive)
-    probs = prosus_probs[:, [1, 2, 0]]  # shape (N, 3) in [neg, neu, pos] order
+    probs = remap_probs(prosus_probs, native_id2label)
 
     pred_ids = probs.argmax(axis=1)
-    y_pred = decode_labels(pred_ids)
+    y_pred = [STANDARD_LABELS[int(i)] for i in pred_ids]
     y_true = test_df['label'].values
 
     confidence = probs.max(axis=1)
     entropy = -(probs * np.log(probs + 1e-10)).sum(axis=1)
 
     summary = metrics_with_optional_proba(y_true, y_pred, probs, model_name=f'finbert_base_zero_shot_{args.model_name}')
+    summary['dataset_name'] = dataset_name
+    summary['dataset_file'] = str(Path(args.data))
+    summary['split_source'] = split_source
+    summary['benchmark_mode'] = benchmark_mode
     summary['test_rows'] = len(test_df)
+    summary['train_rows'] = len(train_df)
+    summary['val_rows'] = len(val_df)
     summary['seed'] = args.seed
     summary['device'] = device
     summary['model_name'] = args.model_name
+    summary['native_id2label'] = json.dumps(native_id2label, sort_keys=True)
+    summary['canonical_remap'] = json.dumps(canonical_remap)
+    summary['label_distribution_train'] = json.dumps(label_dist['train'], sort_keys=True)
+    summary['label_distribution_val'] = json.dumps(label_dist['val'], sort_keys=True)
+    summary['label_distribution_test'] = json.dumps(label_dist['test'], sort_keys=True)
+    summary['text_hash_leakage_count'] = leakage_count
+    summary['git_commit_sha'] = git_sha
     summary['mean_confidence'] = float(confidence.mean())
     summary['mean_entropy'] = float(entropy.mean())
 
     ABSTAIN_THRESHOLD = 0.60
     pred_df = test_df[['id', 'text', 'label']].copy()
+    pred_df['dataset_name'] = dataset_name
+    pred_df['split_source'] = split_source
     pred_df['prediction'] = y_pred
     pred_df['confidence'] = confidence
     pred_df['entropy'] = entropy
@@ -174,14 +196,30 @@ def main():
     cw_path = save_dataframe(classwise_metrics(y_true, y_pred), args.results_dir, 'finbert_classwise_metrics', ts)
     fig_path = f'{args.figures_dir}/finbert_confusion_matrix_{ts}.png'
     save_confusion_matrix_plot(cm, fig_path, title='FinBERT Zero-Shot Confusion Matrix')
-    metrics_path = save_json({'native_id2label': model.config.id2label, 'test_rows': len(test_df)},
+    metrics_path = save_json({'native_id2label': native_id2label, 'canonical_remap': canonical_remap, 'test_rows': len(test_df)},
                              args.results_dir, 'finbert_trainer_metrics', ts)
     manifest = write_manifest(
         args.results_dir, 'finbert_baseline',
         {'summary': str(summary_path), 'predictions': str(pred_path), 'confusion_matrix': str(cm_path),
          'classwise': str(cw_path), 'trainer_metrics': str(metrics_path), 'figure': fig_path,
          'model': args.model_name},
-        {'data': args.data}, ts
+        {
+            'dataset_name': dataset_name,
+            'dataset_file': str(Path(args.data)),
+            'split_source': split_source,
+            'benchmark_mode': benchmark_mode,
+            'train_rows': len(train_df),
+            'val_rows': len(val_df),
+            'test_rows': len(test_df),
+            'label_distribution': label_dist,
+            'text_hash_leakage_count': leakage_count,
+            'seed': args.seed,
+            'model_name': args.model_name,
+            'native_id2label': native_id2label,
+            'canonical_remap': canonical_remap,
+            'git_commit_sha': git_sha,
+        },
+        ts,
     )
 
     print(pd.DataFrame([summary]))

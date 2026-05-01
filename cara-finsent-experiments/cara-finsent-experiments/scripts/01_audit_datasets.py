@@ -192,7 +192,10 @@ def main():
     print('--- SPLIT INTEGRITY ---')
     print(split.to_string(index=False))
     print(f'overall_status={overall}')
-    if overall == 'FAIL':
+    print(f'leakage_status={leakage_status}')
+    audit_gate = 'PASS' if overall == 'PASS' and leakage_status != 'FAIL' else 'FAIL'
+    print(f'audit_gate={audit_gate}')
+    if audit_gate == 'FAIL':
         sys.exit(2)
 
 

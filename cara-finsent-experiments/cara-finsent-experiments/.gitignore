@@ -10,15 +10,33 @@ venv/
 data/raw/*
 data/processed/*
 data/external/*
+data/retrieval_corpus/*
 results/*
 figures/*
 models/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/external/.gitkeep
+!data/retrieval_corpus/.gitkeep
 !results/.gitkeep
 !figures/.gitkeep
 !models/.gitkeep
+
+# Model checkpoints and temporary evaluation directories
+*.bin
+*.ckpt
+*.pt
+*.pth
+*.safetensors
+_tmp_eval/
+_tmp_eval_zero_shot/
+
+# Notebook artifacts and local caches
+notebooks/**/.ipynb_checkpoints/
+notebooks/**/*-checkpoint.ipynb
+*.nbconvert.ipynb
+.mypy_cache/
+.ruff_cache/
 
 # Local development planning notes (not for publication)
 dev_plan/

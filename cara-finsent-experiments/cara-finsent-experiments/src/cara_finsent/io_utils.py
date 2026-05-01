@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -64,6 +65,20 @@ def save_skip_report(skipped: list[Dict[str, Any]], output_dir: str | Path, pref
         return None
     df = pd.DataFrame(skipped)
     return save_dataframe(df, output_dir, prefix, ts)
+
+
+def git_commit_sha(repo_root: str | Path | None = None) -> str:
+    """Return the current git commit SHA or ``unknown`` outside a repo."""
+    root = Path(repo_root) if repo_root is not None else Path(__file__).resolve().parents[2]
+    try:
+        return subprocess.check_output(
+            ['git', 'rev-parse', 'HEAD'],
+            cwd=root,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except Exception:
+        return 'unknown'
 
 
 def write_manifest(output_dir: str | Path, run_name: str, files: Dict[str, str], metadata: Optional[Dict[str, Any]] = None, ts: Optional[str] = None) -> Path:

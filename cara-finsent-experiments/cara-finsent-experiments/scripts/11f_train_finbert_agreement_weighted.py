@@ -15,6 +15,7 @@ Outputs:
 """
 from __future__ import annotations
 
+import json
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
@@ -36,13 +37,17 @@ from transformers import (
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / 'src'))
 
-from cara_finsent.data_utils import STANDARD_LABELS, load_standardized_csv, set_global_seeds  # noqa: E402
-from cara_finsent.io_utils import save_dataframe, save_json, timestamp  # noqa: E402
-from cara_finsent.label_mapping import remap_probs, model_label_remap  # noqa: E402
+from cara_finsent.data_utils import (  # noqa: E402
+    STANDARD_LABELS,
+    auto_detect_gold_split,
+    load_gold_split,
+    set_global_seeds,
+    split_label_distribution,
+    text_hash_leakage_count,
+)
+from cara_finsent.io_utils import git_commit_sha, save_dataframe, save_json, timestamp  # noqa: E402
+from cara_finsent.label_mapping import encode_labels_for_model, remap_probs, model_label_remap  # noqa: E402
 from cara_finsent.metrics import metrics_with_optional_proba  # noqa: E402
-
-
-STANDARD_LABEL2ID = {label: i for i, label in enumerate(STANDARD_LABELS)}
 
 
 def compute_sample_weights(agreement_scores, weight_schedule='all_equal'):
@@ -75,6 +80,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--model_name', default='ProsusAI/finbert')
     ap.add_argument('--data', default=None)
+    ap.add_argument('--dataset_name', default='phrasebank', choices=['phrasebank', 'fiqa'])
     ap.add_argument('--weight_schedule', default='linear', choices=['all_equal', 'linear', 'strong', 'high_only'])
     ap.add_argument('--num_epochs', type=int, default=3)
     ap.add_argument('--batch_size', type=int, default=16)
@@ -94,24 +100,21 @@ def main():
     
     # Load data
     if not args.data:
-        from cara_finsent.data_utils import auto_detect_data
-        args.data = str(auto_detect_data())
+        args.data = str(auto_detect_gold_split(args.dataset_name))
         print(f'[AUTO] data = {args.data}', flush=True)
     
-    df = load_standardized_csv(args.data)
-    
-    # Extract splits
-    if 'split' in df.columns:
-        print(f'[INFO] Using pre-existing splits', flush=True)
-        train_df = df[df['split'] == 'train'].reset_index(drop=True)
-        test_df = df[df['split'] == 'test'].reset_index(drop=True)
-    else:
-        print(f'[ERROR] No pre-split column found', flush=True)
-        sys.exit(1)
+    train_df, val_df, test_df = load_gold_split(args.data)
+    print('[INFO] Using controlled gold split', flush=True)
+
+    split_source = 'controlled_gold_split'
+    benchmark_mode = f'{args.dataset_name}_in_domain'
+    label_dist = split_label_distribution(train_df, val_df, test_df)
+    leakage_count = text_hash_leakage_count(train_df, val_df, test_df)
+    git_sha = git_commit_sha(PROJECT_ROOT)
     
     # Check for agreement column
     if 'agreement' not in train_df.columns:
-        print(f'[WARN] No agreement column; falling back to all_equal weights', flush=True)
+        print('[WARN] No agreement column; falling back to all_equal weights', flush=True)
         args.weight_schedule = 'all_equal'
     
     # Compute weights
@@ -130,15 +133,12 @@ def main():
         }
         print(f"[INFO] Sample weights ({args.weight_schedule}): min={weight_stats['min']:.2f}, max={weight_stats['max']:.2f}, mean={weight_stats['mean']:.2f}", flush=True)
     
-    print(f"[INFO] Train: {len(train_df)}, Test: {len(test_df)}", flush=True)
+    print(f"[INFO] Train: {len(train_df)}, Val: {len(val_df)}, Test: {len(test_df)}", flush=True)
     
     # Load model & tokenizer
     print("[INFO] Loading transformers...", flush=True)
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
-    model = AutoModelForSequenceClassification.from_pretrained(
-        args.model_name,
-        ignore_mismatched_sizes=True,
-    )
+    model = AutoModelForSequenceClassification.from_pretrained(args.model_name)
     
     config = model.config
     id2label = {int(k): str(v) for k, v in dict(config.id2label).items()}
@@ -155,7 +155,7 @@ def main():
         )
     
     train_df = train_df.copy()
-    train_df['label_id'] = train_df['label'].map(STANDARD_LABEL2ID)
+    train_df['label_id'] = encode_labels_for_model(train_df['label'], id2label)
     if sample_weights is not None:
         train_df['sample_weight'] = sample_weights
     
@@ -172,7 +172,7 @@ def main():
         train_ds = train_ds.map(add_weights, with_indices=True)
     
     test_df_copy = test_df.copy()
-    test_df_copy['label_id'] = test_df_copy['label'].map(STANDARD_LABEL2ID)
+    test_df_copy['label_id'] = encode_labels_for_model(test_df_copy['label'], id2label)
     test_ds = Dataset.from_pandas(test_df_copy[['text', 'label_id']]).map(
         tokenize, batched=True, remove_columns=['text']
     )
@@ -240,7 +240,7 @@ def main():
     print(f"[OK] Training complete ({train_elapsed:.1f}s)", flush=True)
     
     # Evaluate on test set
-    print(f"[INFO] Evaluating on test set...", flush=True)
+    print('[INFO] Evaluating on test set...', flush=True)
     eval_start = time.perf_counter()
     pred_output = trainer.predict(test_ds)
     eval_elapsed = time.perf_counter() - eval_start
@@ -255,12 +255,24 @@ def main():
     
     # Metrics
     metrics = metrics_with_optional_proba(y_true, y_pred, probs_canon, model_name='finbert_agreement_weighted')
+    metrics['dataset_name'] = args.dataset_name
+    metrics['dataset_file'] = str(Path(args.data))
+    metrics['split_source'] = split_source
+    metrics['benchmark_mode'] = benchmark_mode
     metrics['train_seconds'] = train_elapsed
     metrics['eval_seconds'] = eval_elapsed
     metrics['train_rows'] = len(train_df)
+    metrics['val_rows'] = len(val_df)
     metrics['test_rows'] = len(test_df)
     metrics['seed'] = args.seed
     metrics['model_name'] = args.model_name
+    metrics['native_id2label'] = json.dumps(id2label, sort_keys=True)
+    metrics['canonical_remap'] = json.dumps(remap_cols)
+    metrics['label_distribution_train'] = json.dumps(label_dist['train'], sort_keys=True)
+    metrics['label_distribution_val'] = json.dumps(label_dist['val'], sort_keys=True)
+    metrics['label_distribution_test'] = json.dumps(label_dist['test'], sort_keys=True)
+    metrics['text_hash_leakage_count'] = leakage_count
+    metrics['git_commit_sha'] = git_sha
     metrics['num_epochs'] = args.num_epochs
     metrics['weight_schedule'] = args.weight_schedule
     metrics['checkpoint_dir'] = checkpoint_dir
@@ -273,6 +285,8 @@ def main():
     
     # Predictions CSV
     pred_df = test_df[['id', 'text', 'label']].copy()
+    pred_df['dataset_name'] = args.dataset_name
+    pred_df['split_source'] = split_source
     pred_df['prediction'] = y_pred
     pred_df['confidence'] = probs_canon.max(axis=1)
     for i, cls in enumerate(STANDARD_LABELS):
@@ -284,6 +298,10 @@ def main():
     manifest = {
         'timestamp_utc': ts,
         'model_name': args.model_name,
+        'dataset_name': args.dataset_name,
+        'dataset_file': str(Path(args.data)),
+        'split_source': split_source,
+        'benchmark_mode': benchmark_mode,
         'seed': args.seed,
         'training_type': 'agreement_weighted_finetuning',
         'weight_schedule': args.weight_schedule,
@@ -291,7 +309,13 @@ def main():
         'batch_size': args.batch_size,
         'learning_rate': args.learning_rate,
         'train_rows': len(train_df),
+        'val_rows': len(val_df),
         'test_rows': len(test_df),
+        'label_distribution': label_dist,
+        'text_hash_leakage_count': leakage_count,
+        'native_id2label': id2label,
+        'canonical_remap': remap_cols,
+        'git_commit_sha': git_sha,
         'accuracy': float(metrics['accuracy']),
         'macro_f1': float(metrics['macro_f1']),
         'train_seconds': float(metrics['train_seconds']),
@@ -302,7 +326,7 @@ def main():
     }
     save_json(manifest, args.output_dir, 'finbert_agreement_weighted_manifest', ts)
     
-    print(f"[DONE] Agreement-aware fine-tuning complete", flush=True)
+    print('[DONE] Agreement-aware fine-tuning complete', flush=True)
 
 
 if __name__ == '__main__':

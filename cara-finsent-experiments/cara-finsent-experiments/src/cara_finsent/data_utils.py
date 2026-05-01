@@ -82,6 +82,31 @@ def auto_detect_data(base_dir: str | Path = 'data/processed') -> Path:
         f'No prepared dataset found in {base_dir}/. '
         'Run `make prepare` first to download Financial PhraseBank + FiQA from Hugging Face.'
     )
+
+
+def auto_detect_gold_split(dataset_name: str, base_dir: str | Path = 'data/processed/gold') -> Path:
+    """Return the latest controlled gold split for a supported dataset."""
+    normalized = str(dataset_name).strip().lower()
+    if normalized not in {'phrasebank', 'fiqa'}:
+        raise SystemExit(f'Unsupported dataset_name={dataset_name!r}. Use one of: phrasebank, fiqa.')
+    path = Path(base_dir) / f'latest_gold_{normalized}_split.csv'
+    if path.exists():
+        return path
+    raise SystemExit(
+        f'Missing gold split for {normalized}. '
+        'Run scripts/06_create_controlled_splits.py first.'
+    )
+
+
+def infer_dataset_name(path: str | Path | None) -> str:
+    """Infer dataset name from a path when possible."""
+    lowered = str(path or '').lower()
+    for name in ('phrasebank', 'fiqa'):
+        if name in lowered:
+            return name
+    return 'unknown'
+
+
 TEXT_CANDIDATES = ['text', 'sentence', 'Sentence', 'headline', 'title', 'body', 'content', 'summary']
 LABEL_CANDIDATES = ['label', 'sentiment', 'Sentiment', 'target', 'class', 'weak_label']
 
@@ -180,6 +205,74 @@ def split_dataframe(df: pd.DataFrame, test_size: float = 0.2, val_size: float = 
     except ValueError:
         train_df, val_df = train_test_split(train_val, test_size=relative_val, random_state=seed, stratify=None)
     return train_df.reset_index(drop=True), val_df.reset_index(drop=True), test_df.reset_index(drop=True)
+
+
+def text_hash_leakage_count(train_df: pd.DataFrame, val_df: pd.DataFrame, test_df: pd.DataFrame) -> int:
+    """Count overlapping text_hash values across train/val/test splits."""
+    train_hashes = set(train_df['text_hash'].astype(str))
+    val_hashes = set(val_df['text_hash'].astype(str))
+    test_hashes = set(test_df['text_hash'].astype(str))
+    return int(
+        len(train_hashes & val_hashes)
+        + len(train_hashes & test_hashes)
+        + len(val_hashes & test_hashes)
+    )
+
+
+def split_label_distribution(train_df: pd.DataFrame, val_df: pd.DataFrame, test_df: pd.DataFrame) -> dict[str, dict[str, int]]:
+    """Return canonical label counts per split."""
+    def _dist(frame: pd.DataFrame) -> dict[str, int]:
+        counts = frame['label'].value_counts().to_dict()
+        return {label: int(counts.get(label, 0)) for label in STANDARD_LABELS}
+
+    return {
+        'train': _dist(train_df),
+        'val': _dist(val_df),
+        'test': _dist(test_df),
+    }
+
+
+def load_gold_split(path: str | Path) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Load a controlled gold split file and validate it strictly."""
+    source = Path(path)
+    if not source.exists():
+        raise SystemExit(f'Gold split file not found: {source}')
+
+    df = pd.read_csv(source)
+    required = {'text', 'label', 'split', 'text_hash'}
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(f'Missing required gold split columns: {sorted(missing)}')
+
+    out = df.copy()
+    out['split'] = out['split'].astype(str).str.strip().str.lower()
+    invalid_splits = sorted(set(out['split']) - {'train', 'val', 'test'})
+    if invalid_splits:
+        raise ValueError(f'Invalid split values in {source}: {invalid_splits}')
+
+    out['label'] = out['label'].astype(str).str.strip().str.lower()
+    invalid_labels = sorted(set(out['label']) - set(STANDARD_LABELS))
+    if invalid_labels:
+        raise ValueError(f'Invalid labels in {source}: {invalid_labels}')
+
+    missing_hashes = int(out['text_hash'].isna().sum() + out['text_hash'].astype(str).str.strip().eq('').sum())
+    if missing_hashes:
+        raise ValueError(f'{source} has {missing_hashes} missing text_hash values.')
+
+    train_df = out[out['split'].eq('train')].reset_index(drop=True)
+    val_df = out[out['split'].eq('val')].reset_index(drop=True)
+    test_df = out[out['split'].eq('test')].reset_index(drop=True)
+    if len(train_df) == 0 or len(val_df) == 0 or len(test_df) == 0:
+        raise ValueError(
+            f'Gold split file must contain non-empty train/val/test partitions. '
+            f'Got train={len(train_df)}, val={len(val_df)}, test={len(test_df)}.'
+        )
+
+    leakage_count = text_hash_leakage_count(train_df, val_df, test_df)
+    if leakage_count:
+        raise ValueError(f'Gold split leakage detected in {source}: text_hash_leakage_count={leakage_count}')
+
+    return train_df, val_df, test_df
 
 
 def encode_labels(labels):

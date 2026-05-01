@@ -71,6 +71,18 @@ def model_label_remap(id2label: Dict[int, str]) -> List[int]:
     return [name_to_idx[lbl] for lbl in CANONICAL_LABELS]
 
 
+def canonical_label_to_model_id(id2label: Dict[int, str]) -> Dict[str, int]:
+    """Map canonical label names to the model's native output ids."""
+    cols = model_label_remap(id2label)
+    return {label: int(cols[index]) for index, label in enumerate(CANONICAL_LABELS)}
+
+
+def encode_labels_for_model(labels: Iterable, id2label: Dict[int, str]) -> np.ndarray:
+    """Encode canonical labels into the model's native label id space."""
+    label_to_id = canonical_label_to_model_id(id2label)
+    return np.array([label_to_id[canonical_label(value)] for value in labels], dtype=np.int64)
+
+
 def remap_probs(probs: np.ndarray, id2label: Dict[int, str]) -> np.ndarray:
     """Reorder a (N, 3) probability array from a model's native label order to canonical."""
     cols = model_label_remap(id2label)
