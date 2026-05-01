@@ -134,7 +134,7 @@ def main():
     test_ds = Dataset.from_pandas(test_df[['text', 'label_id']]).map(tokenize, batched=True, remove_columns=['text'])
     test_ds = test_ds.rename_column('label_id', 'labels')
 
-    model = AutoModelForSequenceClassification.from_pretrained(args.model_name, num_labels=len(STANDARD_LABELS), id2label=ID2LABEL, label2id=LABEL2ID)
+    model = AutoModelForSequenceClassification.from_pretrained(args.model_name, num_labels=len(STANDARD_LABELS), id2label=ID2LABEL, label2id=LABEL2ID, ignore_mismatched_sizes=True)
 
     out_dir = f'{args.models_dir}/finbert_{ts}'
     training_kwargs = dict(
