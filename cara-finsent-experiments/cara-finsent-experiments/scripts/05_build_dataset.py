@@ -93,10 +93,12 @@ def ingest_legacy_latest(path: Path) -> pd.DataFrame:
     df['collected_at'] = df.get('collected_at', pd.NA)
     df['content_sha256'] = df.get('content_sha256', pd.NA)
     df['label_raw'] = df.get('label_raw', df.get('label'))
+    if 'is_uncertain' not in df.columns:
+        df['is_uncertain'] = False
     if 'split' not in df.columns:
         df['split'] = 'train'
     df['split'] = df['split'].fillna('train')
-    return df[['text', 'label', 'label_raw', 'source', 'agreement',
+    return df[['text', 'label', 'label_raw', 'source', 'agreement', 'is_uncertain',
                'source_uri', 'license', 'collected_at', 'content_sha256',
                'split']]
 
@@ -119,12 +121,12 @@ def ingest_raw_dirs(base: Path) -> pd.DataFrame:
             continue
         if 'source' not in f.columns:
             f['source'] = source_dir.name
-        for col in ('agreement', 'source_uri', 'license', 'collected_at',
+        for col in ('agreement', 'is_uncertain', 'source_uri', 'license', 'collected_at',
                     'content_sha256', 'label_raw', 'split'):
             if col not in f.columns:
                 f[col] = pd.NA
         f['split'] = f['split'].fillna('train')
-        frames.append(f[['text', 'label', 'label_raw', 'source', 'agreement',
+        frames.append(f[['text', 'label', 'label_raw', 'source', 'agreement', 'is_uncertain',
                          'source_uri', 'license', 'collected_at',
                          'content_sha256', 'split']])
         print(f'  [INGEST raw/{source_dir.name}] {len(f):>6d} rows')
@@ -499,7 +501,7 @@ def main() -> None:
 
     # column order
     cols = ['text', 'text_clean', 'text_clean_lower', 'label', 'label_raw',
-            'agreement', 'source', 'tier', 'split', 'language', 'n_tokens',
+            'agreement', 'is_uncertain', 'source', 'tier', 'split', 'language', 'n_tokens',
             'qc_flags', 'tickers', 'is_synthetic', 'content_sha256',
             'license', 'collected_at', 'build_id']
     for c in cols:
