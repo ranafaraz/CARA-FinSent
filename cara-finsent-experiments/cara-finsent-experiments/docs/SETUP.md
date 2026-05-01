@@ -56,7 +56,6 @@ export SEC_USER_AGENT="Your Name your_email@example.com"
 Optional:
 
 ```bash
-export STOCKTWITS_ACCESS_TOKEN="..."
 export NEWSAPI_KEY="..."
 export FINNHUB_API_KEY="..."
 ```

@@ -51,7 +51,7 @@ def main():
     parser.add_argument('--top_k', type=int, default=3)
     parser.add_argument('--max_rows', type=int, default=None)
     parser.add_argument('--seed', type=int, default=42)
-    parser.add_argument('--base_model', choices=['logreg', 'svm'], default='logreg')
+    parser.add_argument('--base_model', choices=['logreg', 'svm'], default='svm')
     parser.add_argument('--min_weight', type=float, default=0.4)
     parser.add_argument('--weight_schedule', choices=['linear', 'quadratic'], default='linear')
     # Ablation toggles -- each disables exactly one CARA-lite component.
@@ -73,7 +73,15 @@ def main():
     train_df, val_df, test_df = split_dataframe(df, seed=args.seed)
 
     # Retrieval
-    if args.no_retrieval:
+    # Self-retrieval from training corpus alone degrades performance (similar-topic texts
+    # have mixed sentiments and pollute the input signal). Only enable retrieval when an
+    # external corpus is provided so that retrieved contexts are domain knowledge rather
+    # than resampled training data.
+    if args.no_retrieval or not args.external_corpus_csv:
+        if not args.no_retrieval and not args.external_corpus_csv:
+            print('[INFO] No external_corpus_csv provided; disabling self-retrieval to avoid label-noise contamination. '
+                  'Pass --external_corpus_csv <path> to enable retrieval from an external corpus.')
+            args.no_retrieval = True
         train_texts = train_df['text'].tolist()
         test_texts = test_df['text'].tolist()
         test_ctx = pd.DataFrame()

@@ -30,7 +30,7 @@ SEED_FLAG := --seed $(SEED)
 
 .PHONY: help setup setup-gpu test clean-pyc \
         prepare prepare-local \
-        collect-stocktwits collect-sec collect-news \
+        collect-sec collect-news \
         baseline baseline-smoke \
         finbert finbert-smoke \
         structured retrieval retrieval-ext \
@@ -71,9 +71,6 @@ prepare-local:  ## Standardize from a local CSV (set DATA_RAW=path/to.csv).
 	$(PYTHON) scripts/00_prepare_phrasebank_fiqa.py --local_csv $(DATA_RAW) --skip_hf
 
 # ---------- External corpora ----------
-
-collect-stocktwits:  ## Collect StockTwits messages (no API key needed).
-	$(PYTHON) scripts/01_collect_stocktwits.py --symbols AAPL MSFT TSLA NVDA --limit_per_symbol 30
 
 collect-sec:  ## Collect SEC 10-K filings (requires SEC_USER_AGENT env var).
 	$(PYTHON) scripts/02_collect_sec_10k.py --tickers AAPL MSFT NVDA TSLA --years 3 --max_filings_per_ticker 2

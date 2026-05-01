@@ -19,20 +19,6 @@ The preparation script tries known Hugging Face FiQA-style datasets. If automati
 python scripts/00_prepare_phrasebank_fiqa.py --fiqa_csv data/raw/fiqa.csv
 ```
 
-## StockTwits
-
-Script:
-
-```bash
-python scripts/01_collect_stocktwits.py --symbols AAPL MSFT TSLA NVDA
-```
-
-Notes:
-
-- StockTwits messages may contain `Bullish` or `Bearish` labels.
-- API behavior and access may change.
-- Use only according to StockTwits terms.
-
 ## SEC 10-K filings
 
 Script:

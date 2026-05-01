@@ -11,7 +11,7 @@ The research goal is to move financial sentiment analysis beyond simple label cl
 It provides scripts for:
 
 1. Preparing Financial PhraseBank and FiQA into a standard CSV format.
-2. Collecting additional financial corpora from StockTwits, SEC 10-K filings, and financial news RSS/API sources.
+2. Collecting additional financial corpora from SEC 10-K filings and financial news RSS/API sources.
 3. Running classical ML baselines.
 4. Running FinBERT fine-tuning/evaluation.
 5. Running structured-feature ablations.
@@ -140,12 +140,6 @@ python scripts/90_run_all_classical_pipeline.py --data data/processed/combined_s
 
 ## External corpus collection
 
-### StockTwits
-
-```bash
-python scripts/01_collect_stocktwits.py --symbols AAPL MSFT TSLA NVDA --limit_per_symbol 30
-```
-
 ### SEC 10-K filings
 
 SEC requires a real user-agent with contact email:
@@ -191,4 +185,4 @@ cara_lite_summary_*.csv
 
 ## Important scientific warning
 
-Do not claim stock prediction superiority from Financial PhraseBank alone. PhraseBank is not time-aligned with returns. Use SEC/news/StockTwits only as external validation or weakly labeled corpus unless you later build a time-aligned return dataset.
+Do not claim stock prediction superiority from Financial PhraseBank alone. PhraseBank is not time-aligned with returns. Use SEC filings and news only as external validation or weakly labeled retrieval corpus unless you later build a time-aligned return dataset.
