@@ -43,7 +43,7 @@ def main():
     ap.add_argument('--output_dir', default='results')
     args = ap.parse_args()
 
-    set_global_seeds(args.seed)
+    set_global_seeds(args.seed, enable_deep_learning=True)
     ts = timestamp()
     
     print(f"[INFO] FiQA External Validation (seed={args.seed})", flush=True)

@@ -86,7 +86,7 @@ def main():
     ap.add_argument('--models_dir', default='models')
     args = ap.parse_args()
 
-    set_global_seeds(args.seed)
+    set_global_seeds(args.seed, enable_deep_learning=True)
     ts = timestamp()
     
     print(f"[INFO] FinBERT Agreement-Aware Fine-Tuning (seed={args.seed}, schedule={args.weight_schedule})", flush=True)

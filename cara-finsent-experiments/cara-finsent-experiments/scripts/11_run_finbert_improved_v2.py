@@ -89,7 +89,7 @@ def main():
     parser.add_argument('--models_dir', default='models')
     args = parser.parse_args()
 
-    set_global_seeds(args.seed)
+    set_global_seeds(args.seed, enable_deep_learning=True)
     if not args.data:
         from cara_finsent.data_utils import auto_detect_data
         args.data = str(auto_detect_data())

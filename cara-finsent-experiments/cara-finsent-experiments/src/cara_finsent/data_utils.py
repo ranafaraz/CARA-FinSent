@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import random
+import sys
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -12,26 +13,36 @@ from sklearn.model_selection import train_test_split
 STANDARD_LABELS = ['negative', 'neutral', 'positive']
 
 
-def set_global_seeds(seed: int = 42) -> int:
-    """Pin Python, NumPy, and (if installed) PyTorch / Transformers seeds.
+def set_global_seeds(seed: int = 42, enable_deep_learning: bool = False) -> int:
+    """Pin Python, NumPy, and optionally deep-learning seeds.
 
     Safe to call from any script. Returns the seed for logging convenience.
     """
     os.environ['PYTHONHASHSEED'] = str(seed)
     random.seed(seed)
     np.random.seed(seed)
-    try:
-        import torch  # type: ignore
-        torch.manual_seed(seed)
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed_all(seed)
-    except Exception:
-        pass
-    try:
-        from transformers import set_seed as _hf_set_seed  # type: ignore
-        _hf_set_seed(seed)
-    except Exception:
-        pass
+    if enable_deep_learning:
+        try:
+            import torch  # type: ignore
+            torch.manual_seed(seed)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed_all(seed)
+        except Exception:
+            pass
+        try:
+            from transformers import set_seed as _hf_set_seed  # type: ignore
+            _hf_set_seed(seed)
+        except Exception:
+            pass
+    elif 'torch' in sys.modules:
+        # If torch is already loaded, seed it without forcing a heavyweight import.
+        try:
+            torch = sys.modules['torch']
+            torch.manual_seed(seed)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed_all(seed)
+        except Exception:
+            pass
     return int(seed)
 
 

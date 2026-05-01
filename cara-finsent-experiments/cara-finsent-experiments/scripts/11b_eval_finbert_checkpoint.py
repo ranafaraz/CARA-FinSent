@@ -53,7 +53,7 @@ def main():
     parser.add_argument('--figures_dir', default='figures')
     args = parser.parse_args()
 
-    set_global_seeds(args.seed)
+    set_global_seeds(args.seed, enable_deep_learning=True)
 
     if not args.data:
         from cara_finsent.data_utils import auto_detect_data

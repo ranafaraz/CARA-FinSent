@@ -56,7 +56,7 @@ def main():
     ap.add_argument('--models_dir', default='models')
     args = ap.parse_args()
 
-    set_global_seeds(args.seed)
+    set_global_seeds(args.seed, enable_deep_learning=True)
     ts = timestamp()
     
     print(f"[INFO] FinBERT Fine-Tuning on PhraseBank (seed={args.seed})", flush=True)
