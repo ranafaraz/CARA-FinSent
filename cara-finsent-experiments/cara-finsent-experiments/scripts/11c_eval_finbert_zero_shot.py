@@ -89,8 +89,16 @@ def main():
 
     ts = timestamp()
     df = load_standardized_csv(args.data, args.text_col, args.label_col)
-    _train_df, _val_df, test_df = split_dataframe(df, seed=args.seed)
-    print(f'[INFO] Test rows: {len(test_df)}')
+    
+    # Check if pre-split column exists; if so, use it (Phase 1 controlled splits)
+    if 'split' in df.columns:
+        print(f'[INFO] Using pre-existing splits from {args.data}', flush=True)
+        test_df = df[df['split'] == 'test'].reset_index(drop=True)
+        print(f'[INFO] Pre-split test rows: {len(test_df)}', flush=True)
+    else:
+        print(f'[INFO] No pre-split column; creating splits with seed={args.seed}', flush=True)
+        _train_df, _val_df, test_df = split_dataframe(df, seed=args.seed)
+        print(f'[INFO] Test rows: {len(test_df)}')
 
     # Load base model with its ORIGINAL ProsusAI label mapping (no override)
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)

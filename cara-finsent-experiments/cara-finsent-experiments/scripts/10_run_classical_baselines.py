@@ -66,8 +66,18 @@ def main():
     ts = timestamp()
     df = load_standardized_csv(args.data, args.text_col, args.label_col)
     df = apply_max_rows(df, args.max_rows, seed=args.seed)
-    train_df, val_df, test_df = split_dataframe(df, test_size=args.test_size, val_size=args.val_size, seed=args.seed)
-    print(f'[INFO] seed={args.seed} train/val/test: {len(train_df)}/{len(val_df)}/{len(test_df)}')
+    
+    # Check if pre-split column exists; if so, use it (Phase 1 controlled splits)
+    if 'split' in df.columns:
+        print(f'[INFO] Using pre-existing splits from {args.data}')
+        train_df = df[df['split'] == 'train'].reset_index(drop=True)
+        val_df = df[df['split'] == 'val'].reset_index(drop=True)
+        test_df = df[df['split'] == 'test'].reset_index(drop=True)
+        print(f'[INFO] Pre-split: train/val/test: {len(train_df)}/{len(val_df)}/{len(test_df)}')
+    else:
+        print(f'[INFO] No pre-split column; creating splits with seed={args.seed}')
+        train_df, val_df, test_df = split_dataframe(df, test_size=args.test_size, val_size=args.val_size, seed=args.seed)
+        print(f'[INFO] Created splits: train/val/test: {len(train_df)}/{len(val_df)}/{len(test_df)}')
 
     rows = []
     prediction_frames = []
