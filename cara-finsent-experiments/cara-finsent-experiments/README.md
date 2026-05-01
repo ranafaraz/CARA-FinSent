@@ -138,6 +138,32 @@ python scripts/16_run_full_cara_lite_experiment.py --data data/processed/combine
 python scripts/90_run_all_classical_pipeline.py --data data/processed/combined_standardized_<timestamp>.csv
 ```
 
+## Step 6: Phase 4 research-grade experiments
+
+```bash
+# Multi-seed sweep on the controlled gold split (PhraseBank)
+python scripts/19_run_seed_sweep.py \
+    --dataset_name phrasebank \
+    --models classical,finbert_zero_shot,finbert_finetuned,agreement_weighted \
+    --seeds 42 43 44 45 46
+
+# Aggregate every seed_sweep_summary_*.csv into mean/std + CI95 leaderboards
+python scripts/20_aggregate_research_results.py --results_dir results
+
+# Calibration / abstention + error analysis from a predictions CSV
+python scripts/22_calibration_abstention_report.py --predictions <pred.csv> --model_name finbert_zero_shot --dataset_name phrasebank
+python scripts/21_error_analysis.py            --predictions <pred.csv> --model_name finbert_zero_shot --dataset_name phrasebank
+
+# FiQA semantic audit + external retrieval corpus scaffold
+python scripts/23_fiqa_semantics_audit.py
+python scripts/24_build_external_retrieval_corpus.py --inputs <external_news.csv> [...]
+
+# Final research-readiness gate
+python scripts/25_research_gate.py
+```
+
+See [docs/PHASE4_RESEARCH_GRADE_EXPERIMENT_PLAN.md](docs/PHASE4_RESEARCH_GRADE_EXPERIMENT_PLAN.md) for full guidance and acceptance criteria.
+
 ## External corpus collection
 
 ### SEC 10-K filings

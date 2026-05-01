@@ -69,10 +69,25 @@ def compute_sample_weights(agreement_scores, weight_schedule='all_equal'):
                   np.where(agreement_scores < q3, 0.75, 1.00)))
         return weights.astype(np.float32)
     elif weight_schedule == 'high_only':
-        # Binary: 0.0 for <75%, 1.0 for >=75%
-        return (agreement_scores >= 75).astype(np.float32)
+        # Binary: 0.0 below the high-agreement threshold, 1.0 at/above it.
+        threshold = high_agreement_threshold(agreement_scores)
+        return (np.asarray(agreement_scores) >= threshold).astype(np.float32)
     else:
         raise ValueError(f"Unknown weight schedule: {weight_schedule}")
+
+
+def high_agreement_threshold(agreement_scores) -> float:
+    """Return the high-agreement threshold matching the agreement scale.
+
+    PhraseBank stores agreement as decimals (0.50, 0.66, 0.75, 1.00). Some
+    upstream sources expose the same values multiplied by 100. This helper
+    inspects the score range and returns 0.75 or 75 accordingly so that the
+    `high_only` schedule never silently filters out the entire training set.
+    """
+    arr = np.asarray(agreement_scores, dtype=float)
+    if arr.size == 0:
+        return 0.75
+    return 0.75 if float(arr.max()) <= 1.0 else 75.0
 
 
 def main():
@@ -119,9 +134,19 @@ def main():
     
     # Compute weights
     if args.weight_schedule == 'high_only':
-        # Filter to high-agreement examples
-        train_df_filtered = train_df[train_df['agreement'] >= 75].reset_index(drop=True)
-        print(f"[INFO] high_only: {len(train_df_filtered)}/{len(train_df)} high-agreement examples retained", flush=True)
+        # Filter to high-agreement examples using a scale-aware threshold.
+        threshold = high_agreement_threshold(train_df['agreement'].values)
+        train_df_filtered = train_df[train_df['agreement'] >= threshold].reset_index(drop=True)
+        print(
+            f"[INFO] high_only (threshold={threshold}): "
+            f"{len(train_df_filtered)}/{len(train_df)} high-agreement examples retained",
+            flush=True,
+        )
+        if len(train_df_filtered) == 0:
+            raise SystemExit(
+                f'high_only filter produced 0 training rows (threshold={threshold}). '
+                'Check that the agreement column is on the expected scale.'
+            )
         train_df = train_df_filtered
         sample_weights = None
     else:
@@ -171,16 +196,36 @@ def main():
             return examples
         train_ds = train_ds.map(add_weights, with_indices=True)
     
+    val_df_copy = val_df.copy()
+    val_df_copy['label_id'] = encode_labels_for_model(val_df_copy['label'], id2label)
+    val_ds = Dataset.from_pandas(val_df_copy[['text', 'label_id']]).map(
+        tokenize, batched=True, remove_columns=['text']
+    )
+    val_ds = val_ds.rename_column('label_id', 'labels')
+
     test_df_copy = test_df.copy()
     test_df_copy['label_id'] = encode_labels_for_model(test_df_copy['label'], id2label)
     test_ds = Dataset.from_pandas(test_df_copy[['text', 'label_id']]).map(
         tokenize, batched=True, remove_columns=['text']
     )
     test_ds = test_ds.rename_column('label_id', 'labels')
-    
-    # Training arguments
+
+    def compute_metrics(eval_pred):
+        from sklearn.metrics import accuracy_score, f1_score
+        logits, labels = eval_pred
+        probs_native_eval = torch.softmax(torch.tensor(logits), dim=1).numpy()
+        probs_canon_eval = remap_probs(probs_native_eval, id2label)
+        y_pred_eval = [STANDARD_LABELS[int(i)] for i in probs_canon_eval.argmax(axis=1)]
+        from cara_finsent.label_mapping import canonical_label as _cl
+        y_true_eval = [_cl(id2label[int(i)]) for i in labels]
+        return {
+            'accuracy': accuracy_score(y_true_eval, y_pred_eval),
+            'macro_f1': f1_score(y_true_eval, y_pred_eval, average='macro', zero_division=0),
+        }
+
+    # Training arguments: validation-driven model selection + early stopping
     checkpoint_dir = str(Path(args.models_dir) / f'finbert_agreement_weighted_{args.weight_schedule}_{ts}')
-    training_args = TrainingArguments(
+    training_kwargs = dict(
         output_dir=checkpoint_dir,
         num_train_epochs=args.num_epochs,
         per_device_train_batch_size=args.batch_size,
@@ -189,49 +234,59 @@ def main():
         warmup_steps=args.warmup_steps,
         weight_decay=0.01,
         logging_steps=50,
-        save_steps=500,
-        eval_strategy='no',
+        save_strategy='epoch',
+        save_total_limit=2,
+        load_best_model_at_end=True,
+        metric_for_best_model='macro_f1',
+        greater_is_better=True,
         seed=args.seed,
         fp16=False,
         report_to='none',
         disable_tqdm=False,
     )
+    try:
+        training_args = TrainingArguments(eval_strategy='epoch', **training_kwargs)
+    except TypeError:
+        training_args = TrainingArguments(evaluation_strategy='epoch', **training_kwargs)
     
     # Custom trainer for weighted loss
     from transformers.trainer import Trainer
-    
+    from transformers import EarlyStoppingCallback
+
     class WeightedTrainer(Trainer):
-        def compute_loss(self, model, inputs, return_outputs=False):
+        def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
+            # Newer transformers versions pass extra kwargs (e.g. num_items_in_batch).
             labels = inputs.pop("labels")
-            if 'sample_weight' in inputs:
-                sample_weight = inputs.pop("sample_weight")
-            else:
-                sample_weight = None
-            
+            sample_weight = inputs.pop("sample_weight", None)
+
             outputs = model(**inputs)
             logits = outputs.logits
-            
+
             loss_fn = torch.nn.CrossEntropyLoss(reduction='none')
             loss = loss_fn(logits, labels)
-            
+
             if sample_weight is not None:
-                loss = loss * torch.tensor(sample_weight, device=loss.device)
-                loss = loss.mean()
+                if not isinstance(sample_weight, torch.Tensor):
+                    sample_weight = torch.as_tensor(sample_weight)
+                sample_weight = sample_weight.to(loss.device).float()
+                loss = (loss * sample_weight).mean()
             else:
                 loss = loss.mean()
-            
+
             return (loss, outputs) if return_outputs else loss
-    
+
+    callbacks = [EarlyStoppingCallback(early_stopping_patience=2)]
+
     # Train
     print(f"[INFO] Starting training for {args.num_epochs} epochs...", flush=True)
-    trainer = WeightedTrainer(
+    trainer_cls = WeightedTrainer if sample_weights is not None else Trainer
+    trainer = trainer_cls(
         model=model,
         args=training_args,
         train_dataset=train_ds,
-    ) if sample_weights is not None else Trainer(
-        model=model,
-        args=training_args,
-        train_dataset=train_ds,
+        eval_dataset=val_ds,
+        compute_metrics=compute_metrics,
+        callbacks=callbacks,
     )
     
     train_start = time.perf_counter()

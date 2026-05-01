@@ -106,3 +106,38 @@ python scripts/90_run_all_classical_pipeline.py
 
 Purpose: run baselines + structured + retrieval + calibration + CARA-lite.
 
+## E9 - Phase 4 research-grade layer
+
+These scripts turn the pipeline into reproducible, statistically defensible
+evidence for the paper. They never resplit the controlled gold splits.
+
+```bash
+# Multi-seed sweep (per dataset)
+python scripts/19_run_seed_sweep.py --dataset_name phrasebank \
+    --models classical,finbert_zero_shot,finbert_finetuned,agreement_weighted \
+    --seeds 42 43 44 45 46
+
+# Mean/std + 95% CI leaderboards across all sweep files
+python scripts/20_aggregate_research_results.py --results_dir results
+
+# Reliability + abstention from any predictions CSV
+python scripts/22_calibration_abstention_report.py \
+    --predictions <pred.csv> --model_name <name> --dataset_name <name>
+
+# Class-wise + neutral-confusion error analysis
+python scripts/21_error_analysis.py \
+    --predictions <pred.csv> --model_name <name> --dataset_name <name>
+
+# FiQA semantic audit (raw vs normalized labels, recommendation)
+python scripts/23_fiqa_semantics_audit.py
+
+# External retrieval corpus scaffold (gold-test text is excluded by hash)
+python scripts/24_build_external_retrieval_corpus.py --inputs <news.csv> [...]
+
+# One-command research gate
+python scripts/25_research_gate.py
+```
+
+The `25_research_gate.py` exit code is 0 when every check passes and prints
+`research_gate=PASS`; otherwise it prints `research_gate=FAIL` and exits 2.
+
