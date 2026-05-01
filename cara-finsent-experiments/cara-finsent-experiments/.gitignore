@@ -19,3 +19,7 @@ models/*
 !results/.gitkeep
 !figures/.gitkeep
 !models/.gitkeep
+
+# Local development planning notes (not for publication)
+dev_plan/
+

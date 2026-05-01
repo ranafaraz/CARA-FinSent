@@ -16,6 +16,27 @@ import pandas as pd
 
 from cara_finsent.data_utils import normalize_label, load_standardized_csv
 from cara_finsent.io_utils import save_dataframe, timestamp, write_manifest
+from cara_finsent.label_mapping import canonical_label, text_hash
+
+
+def _to_clean_gold(df: pd.DataFrame, source_name: str) -> pd.DataFrame:
+    """Project a source-specific dataframe to the Phase 1 clean-gold schema."""
+    out = df.copy()
+    out['text'] = out['text'].astype(str)
+    out['label'] = out['label'].apply(canonical_label)
+    out = out[out['label'].isin({'negative', 'neutral', 'positive'})].copy()
+    out = out[out['text'].str.strip().str.len() > 0].copy()
+    out['source_dataset'] = out.get('source_dataset', source_name)
+    if 'id' not in out.columns:
+        out['id'] = [f'{source_name}_{i}' for i in range(len(out))]
+    out['text_hash'] = out['text'].apply(text_hash)
+    cols = ['id', 'text', 'label', 'source_dataset', 'text_hash']
+    if 'agreement' in out.columns:
+        cols.append('agreement')
+    if 'agreement_config' in out.columns:
+        cols.append('agreement_config')
+    extra = [c for c in out.columns if c not in cols]
+    return out[cols + extra].reset_index(drop=True)
 
 PHRASEBANK_CONFIGS = [
     ('sentences_50agree', 0.50),
@@ -253,7 +274,13 @@ def main():
             path = save_dataframe(phrase, args.output_dir, 'phrasebank_standardized', ts)
             outputs['phrasebank_standardized'] = str(path)
             frames.append(phrase)
+            # Phase 1 clean-gold output (separate from combined).
+            gold_phrase = _to_clean_gold(phrase, 'financial_phrasebank')
+            gp_path = save_dataframe(gold_phrase, Path(args.output_dir) / 'gold', 'phrasebank_clean', ts)
+            shutil.copy(str(gp_path), str(Path(args.output_dir) / 'gold' / 'latest_gold_phrasebank.csv'))
+            outputs['phrasebank_clean'] = str(gp_path)
             print(f'[OK] PhraseBank rows: {len(phrase)} -> {path}')
+            print(f'[OK] PhraseBank gold rows: {len(gold_phrase)} -> {gp_path}')
         except Exception as exc:
             print(f'[WARN] PhraseBank download failed: {exc}')
 
@@ -263,13 +290,23 @@ def main():
         path = save_dataframe(fiqa, args.output_dir, 'fiqa_standardized', ts)
         outputs['fiqa_standardized'] = str(path)
         frames.append(fiqa)
+        gold_fiqa = _to_clean_gold(fiqa, 'fiqa')
+        gf_path = save_dataframe(gold_fiqa, Path(args.output_dir) / 'gold', 'fiqa_clean', ts)
+        shutil.copy(str(gf_path), str(Path(args.output_dir) / 'gold' / 'latest_gold_fiqa.csv'))
+        outputs['fiqa_clean'] = str(gf_path)
+        print(f'[OK] FiQA gold rows: {len(gold_fiqa)} -> {gf_path}')
     elif not args.skip_hf and not args.skip_fiqa:
         try:
             fiqa = load_fiqa_hf()
             path = save_dataframe(fiqa, args.output_dir, 'fiqa_standardized', ts)
             outputs['fiqa_standardized'] = str(path)
             frames.append(fiqa)
+            gold_fiqa = _to_clean_gold(fiqa, 'fiqa')
+            gf_path = save_dataframe(gold_fiqa, Path(args.output_dir) / 'gold', 'fiqa_clean', ts)
+            shutil.copy(str(gf_path), str(Path(args.output_dir) / 'gold' / 'latest_gold_fiqa.csv'))
+            outputs['fiqa_clean'] = str(gf_path)
             print(f'[OK] FiQA rows: {len(fiqa)} -> {path}')
+            print(f'[OK] FiQA gold rows: {len(gold_fiqa)} -> {gf_path}')
         except Exception as exc:
             print(f'[WARN] FiQA download failed: {exc}')
 

@@ -1,0 +1,10 @@
+source_dataset,split,label,rows
+fiqa,test,negative,50
+fiqa,test,neutral,50
+fiqa,test,positive,50
+fiqa,train,negative,632
+fiqa,train,neutral,34
+fiqa,train,positive,295
+fiqa,validation,negative,34
+fiqa,validation,neutral,34
+fiqa,validation,positive,34
