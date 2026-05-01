@@ -16,7 +16,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import LinearSVC
 
-from cara_finsent.data_utils import apply_max_rows, load_standardized_csv, split_dataframe
+from cara_finsent.data_utils import apply_max_rows, load_standardized_csv, set_global_seeds, split_dataframe
 from cara_finsent.feature_extractor import FinancialFeatureExtractor
 from cara_finsent.io_utils import save_dataframe, timestamp, write_manifest
 from cara_finsent.metrics import classwise_metrics, confusion_matrix_df, metrics_with_optional_proba
@@ -34,17 +34,23 @@ def fit_transform_structured(train_text, test_text):
 
 def main():
     parser = argparse.ArgumentParser(description='Compare TF-IDF-only vs TF-IDF + structured financial features.')
-    parser.add_argument('--data', required=True)
+    parser.add_argument('--data', default=None, help='Standardized CSV. Auto-detected from data/processed/latest.csv if omitted.')
     parser.add_argument('--text_col', default=None)
     parser.add_argument('--label_col', default=None)
     parser.add_argument('--max_rows', type=int, default=None)
     parser.add_argument('--max_features', type=int, default=50000)
+    parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--results_dir', default='results')
     args = parser.parse_args()
 
+    set_global_seeds(args.seed)
+    if not args.data:
+        from cara_finsent.data_utils import auto_detect_data
+        args.data = str(auto_detect_data())
+        print(f'[AUTO] data = {args.data}')
     ts = timestamp()
-    df = apply_max_rows(load_standardized_csv(args.data, args.text_col, args.label_col), args.max_rows)
-    train_df, val_df, test_df = split_dataframe(df)
+    df = apply_max_rows(load_standardized_csv(args.data, args.text_col, args.label_col), args.max_rows, seed=args.seed)
+    train_df, val_df, test_df = split_dataframe(df, seed=args.seed)
 
     vectorizer = TfidfVectorizer(max_features=args.max_features, ngram_range=(1, 2), stop_words='english')
     X_train_tfidf = vectorizer.fit_transform(train_df['text'])
@@ -54,10 +60,10 @@ def main():
     X_test_combo = hstack([X_test_tfidf, X_test_struct]).tocsr()
 
     experiments = [
-        ('tfidf_logistic_regression', LogisticRegression(max_iter=2000, class_weight='balanced', n_jobs=-1), X_train_tfidf, X_test_tfidf),
-        ('tfidf_structured_logistic_regression', LogisticRegression(max_iter=2000, class_weight='balanced', n_jobs=-1), X_train_combo, X_test_combo),
-        ('tfidf_linear_svm', LinearSVC(class_weight='balanced'), X_train_tfidf, X_test_tfidf),
-        ('tfidf_structured_linear_svm', LinearSVC(class_weight='balanced'), X_train_combo, X_test_combo),
+        ('tfidf_logistic_regression', LogisticRegression(max_iter=2000, class_weight='balanced', n_jobs=-1, random_state=args.seed), X_train_tfidf, X_test_tfidf),
+        ('tfidf_structured_logistic_regression', LogisticRegression(max_iter=2000, class_weight='balanced', n_jobs=-1, random_state=args.seed), X_train_combo, X_test_combo),
+        ('tfidf_linear_svm', LinearSVC(class_weight='balanced', random_state=args.seed), X_train_tfidf, X_test_tfidf),
+        ('tfidf_structured_linear_svm', LinearSVC(class_weight='balanced', random_state=args.seed), X_train_combo, X_test_combo),
     ]
     rows = []
     preds = []
@@ -72,6 +78,7 @@ def main():
         m = metrics_with_optional_proba(test_df['label'], y_pred, proba, model_name=name)
         m['seconds'] = elapsed
         m['structured_features_used'] = 'structured' in name
+        m['seed'] = args.seed
         rows.append(m)
         pred_df = test_df[['id', 'text', 'label']].copy()
         pred_df['model'] = name

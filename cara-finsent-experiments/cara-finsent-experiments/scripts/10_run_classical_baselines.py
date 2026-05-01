@@ -18,26 +18,25 @@ from sklearn.naive_bayes import MultinomialNB
 from sklearn.pipeline import Pipeline
 from sklearn.svm import LinearSVC
 
-from cara_finsent.data_utils import apply_max_rows, load_standardized_csv, split_dataframe
+from cara_finsent.data_utils import apply_max_rows, load_standardized_csv, set_global_seeds, split_dataframe
 from cara_finsent.io_utils import save_dataframe, timestamp, write_manifest
 from cara_finsent.metrics import classwise_metrics, confusion_matrix_df, metrics_with_optional_proba
 from cara_finsent.plotting import save_confusion_matrix_plot, save_metric_bar_plot
 
 
-def get_models(include_xgboost: bool = True):
+def get_models(include_xgboost: bool = True, seed: int = 42):
     models = {
-        'majority_baseline': DummyClassifier(strategy='most_frequent'),
-        'tfidf_logistic_regression': LogisticRegression(max_iter=2000, class_weight='balanced', n_jobs=-1),
-        'tfidf_linear_svm': LinearSVC(class_weight='balanced'),
-        'tfidf_sgd_log_loss': SGDClassifier(loss='log_loss', class_weight='balanced', random_state=42),
+        'majority_baseline': DummyClassifier(strategy='most_frequent', random_state=seed),
+        'tfidf_logistic_regression': LogisticRegression(max_iter=2000, class_weight='balanced', n_jobs=-1, random_state=seed),
+        'tfidf_linear_svm': LinearSVC(class_weight='balanced', random_state=seed),
+        'tfidf_sgd_log_loss': SGDClassifier(loss='log_loss', class_weight='balanced', random_state=seed),
         'tfidf_multinomial_nb': MultinomialNB(),
-        'tfidf_random_forest': RandomForestClassifier(n_estimators=300, class_weight='balanced', random_state=42, n_jobs=-1),
+        'tfidf_random_forest': RandomForestClassifier(n_estimators=300, class_weight='balanced', random_state=seed, n_jobs=-1),
     }
     if include_xgboost:
         try:
             from xgboost import XGBClassifier
-            from sklearn.preprocessing import LabelEncoder
-            models['tfidf_xgboost'] = XGBClassifier(n_estimators=250, max_depth=4, learning_rate=0.05, eval_metric='mlogloss', random_state=42, n_jobs=-1)
+            models['tfidf_xgboost'] = XGBClassifier(n_estimators=250, max_depth=4, learning_rate=0.05, eval_metric='mlogloss', random_state=seed, n_jobs=-1)
         except Exception:
             print('[WARN] xgboost unavailable; skipping XGBoost.')
     return models
@@ -45,7 +44,7 @@ def get_models(include_xgboost: bool = True):
 
 def main():
     parser = argparse.ArgumentParser(description='Run classical TF-IDF baselines and save timestamped CSV results.')
-    parser.add_argument('--data', required=True, help='Standardized CSV with text and label columns.')
+    parser.add_argument('--data', default=None, help='Standardized CSV. Auto-detected from data/processed/latest.csv if omitted.')
     parser.add_argument('--text_col', default=None)
     parser.add_argument('--label_col', default=None)
     parser.add_argument('--max_rows', type=int, default=None)
@@ -54,20 +53,26 @@ def main():
     parser.add_argument('--max_features', type=int, default=50000)
     parser.add_argument('--ngram_max', type=int, default=2)
     parser.add_argument('--no_xgboost', action='store_true')
+    parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--results_dir', default='results')
     parser.add_argument('--figures_dir', default='figures')
     args = parser.parse_args()
 
+    set_global_seeds(args.seed)
+    if not args.data:
+        from cara_finsent.data_utils import auto_detect_data
+        args.data = str(auto_detect_data())
+        print(f'[AUTO] data = {args.data}')
     ts = timestamp()
     df = load_standardized_csv(args.data, args.text_col, args.label_col)
-    df = apply_max_rows(df, args.max_rows)
-    train_df, val_df, test_df = split_dataframe(df, test_size=args.test_size, val_size=args.val_size)
-    print(f'[INFO] Rows train/val/test: {len(train_df)}/{len(val_df)}/{len(test_df)}')
+    df = apply_max_rows(df, args.max_rows, seed=args.seed)
+    train_df, val_df, test_df = split_dataframe(df, test_size=args.test_size, val_size=args.val_size, seed=args.seed)
+    print(f'[INFO] seed={args.seed} train/val/test: {len(train_df)}/{len(val_df)}/{len(test_df)}')
 
     rows = []
     prediction_frames = []
     output_files = {}
-    for name, model in get_models(include_xgboost=not args.no_xgboost).items():
+    for name, model in get_models(include_xgboost=not args.no_xgboost, seed=args.seed).items():
         print(f'[RUN] {name}')
         start = time.perf_counter()
         pipe = Pipeline([
@@ -91,13 +96,18 @@ def main():
         metrics['train_plus_infer_seconds'] = elapsed
         metrics['train_rows'] = len(train_df)
         metrics['test_rows'] = len(test_df)
+        metrics['seed'] = args.seed
         rows.append(metrics)
 
         pred_df = test_df[['id', 'text', 'label']].copy()
         pred_df['model'] = name
         pred_df['prediction'] = y_pred
         if y_proba is not None:
-            for i, cls in enumerate(getattr(pipe.named_steps['clf'], 'classes_', ['negative', 'neutral', 'positive'])):
+            if name == 'tfidf_xgboost':
+                proba_classes = list(le.classes_)
+            else:
+                proba_classes = list(getattr(pipe.named_steps['clf'], 'classes_', ['negative', 'neutral', 'positive']))
+            for i, cls in enumerate(proba_classes):
                 cls_name = str(cls) if not isinstance(cls, (int, float)) else ['negative', 'neutral', 'positive'][int(cls)]
                 pred_df[f'proba_{cls_name}'] = y_proba[:, i]
         prediction_frames.append(pred_df)

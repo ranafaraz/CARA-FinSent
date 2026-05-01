@@ -16,39 +16,49 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.svm import LinearSVC
 
-from cara_finsent.data_utils import apply_max_rows, load_standardized_csv, split_dataframe
+from cara_finsent.data_utils import apply_max_rows, load_standardized_csv, set_global_seeds, split_dataframe
 from cara_finsent.io_utils import save_dataframe, timestamp, write_manifest
 from cara_finsent.metrics import classwise_metrics, confusion_matrix_df, metrics_with_optional_proba
 
 
-def agreement_weights(values, min_weight=0.4):
+def agreement_weights(values, min_weight: float = 0.4, schedule: str = 'linear'):
     v = pd.to_numeric(values, errors='coerce').fillna(1.0).astype(float)
-    v = v.clip(lower=0.0, upper=1.0)
-    return np.maximum(v.values, min_weight)
+    v = v.clip(lower=0.0, upper=1.0).values
+    if schedule == 'quadratic':
+        v = v ** 2
+    return np.maximum(v, min_weight)
 
 
 def main():
     parser = argparse.ArgumentParser(description='Run agreement-aware sample-weight experiments using PhraseBank agreement levels.')
-    parser.add_argument('--data', required=True)
+    parser.add_argument('--data', default=None, help='Standardized CSV with agreement column. Auto-detected if omitted.')
     parser.add_argument('--text_col', default=None)
     parser.add_argument('--label_col', default=None)
     parser.add_argument('--agreement_col', default='agreement')
+    parser.add_argument('--min_weight', type=float, default=0.4, help='Lower bound applied to per-sample weights.')
+    parser.add_argument('--weight_schedule', choices=['linear', 'quadratic'], default='linear')
+    parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--max_rows', type=int, default=None)
     parser.add_argument('--results_dir', default='results')
     args = parser.parse_args()
 
+    set_global_seeds(args.seed)
+    if not args.data:
+        from cara_finsent.data_utils import auto_detect_data
+        args.data = str(auto_detect_data())
+        print(f'[AUTO] data = {args.data}')
     ts = timestamp()
-    df = apply_max_rows(load_standardized_csv(args.data, args.text_col, args.label_col), args.max_rows)
+    df = apply_max_rows(load_standardized_csv(args.data, args.text_col, args.label_col), args.max_rows, seed=args.seed)
     if args.agreement_col not in df.columns:
         raise SystemExit(f'Missing agreement column {args.agreement_col!r}. Run 00_prepare_phrasebank_fiqa.py first or provide a CSV with agreement values.')
-    train_df, val_df, test_df = split_dataframe(df)
-    weights = agreement_weights(train_df[args.agreement_col])
+    train_df, val_df, test_df = split_dataframe(df, seed=args.seed)
+    weights = agreement_weights(train_df[args.agreement_col], min_weight=args.min_weight, schedule=args.weight_schedule)
 
     experiments = [
-        ('unweighted_logistic_regression', LogisticRegression(max_iter=2000, class_weight='balanced', n_jobs=-1), None),
-        ('agreement_weighted_logistic_regression', LogisticRegression(max_iter=2000, class_weight='balanced', n_jobs=-1), weights),
-        ('unweighted_linear_svm', LinearSVC(class_weight='balanced'), None),
-        ('agreement_weighted_linear_svm', LinearSVC(class_weight='balanced'), weights),
+        ('unweighted_logistic_regression', LogisticRegression(max_iter=2000, class_weight='balanced', n_jobs=-1, random_state=args.seed), None),
+        ('agreement_weighted_logistic_regression', LogisticRegression(max_iter=2000, class_weight='balanced', n_jobs=-1, random_state=args.seed), weights),
+        ('unweighted_linear_svm', LinearSVC(class_weight='balanced', random_state=args.seed), None),
+        ('agreement_weighted_linear_svm', LinearSVC(class_weight='balanced', random_state=args.seed), weights),
     ]
     rows = []
     subset_rows = []
@@ -67,6 +77,9 @@ def main():
         proba = pipe.predict_proba(test_df['text']) if hasattr(pipe, 'predict_proba') else None
         m = metrics_with_optional_proba(test_df['label'], y_pred, proba, model_name=name)
         m['seconds'] = elapsed
+        m['min_weight'] = args.min_weight
+        m['weight_schedule'] = args.weight_schedule
+        m['seed'] = args.seed
         rows.append(m)
         pred_df = test_df[['id', 'text', 'label', args.agreement_col]].copy()
         pred_df['model'] = name

@@ -6,6 +6,26 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / 'src'))
 
+# Load .env so HF_TOKEN and other secrets are available before any HF import
+try:
+    from dotenv import load_dotenv
+    load_dotenv(PROJECT_ROOT / '.env', override=False)
+except ImportError:
+    pass
+
+import os
+_hf_token = os.environ.get('HF_TOKEN')
+if _hf_token:
+    try:
+        from huggingface_hub import login as _hf_login
+        _hf_login(token=_hf_token, add_to_git_credential=False)
+        print(f'[INFO] HuggingFace authenticated via HF_TOKEN')
+    except Exception as _e:
+        print(f'[WARN] HF login failed: {_e}')
+
+# Suppress symlink warning on Windows
+os.environ.setdefault('HF_HUB_DISABLE_SYMLINKS_WARNING', '1')
+
 import argparse
 import time
 
@@ -14,9 +34,9 @@ import pandas as pd
 import torch
 from datasets import Dataset
 from sklearn.metrics import accuracy_score, f1_score, matthews_corrcoef, precision_score, recall_score
-from transformers import AutoModelForSequenceClassification, AutoTokenizer, Trainer, TrainingArguments
+from transformers import AutoModelForSequenceClassification, AutoTokenizer, EarlyStoppingCallback, Trainer, TrainingArguments
 
-from cara_finsent.data_utils import STANDARD_LABELS, apply_max_rows, decode_labels, encode_labels, load_standardized_csv, split_dataframe
+from cara_finsent.data_utils import STANDARD_LABELS, apply_max_rows, decode_labels, encode_labels, load_standardized_csv, set_global_seeds, split_dataframe
 from cara_finsent.io_utils import save_dataframe, save_json, timestamp, write_manifest
 from cara_finsent.metrics import classwise_metrics, confusion_matrix_df, metrics_with_optional_proba
 from cara_finsent.plotting import save_confusion_matrix_plot
@@ -42,7 +62,7 @@ def compute_metrics(eval_pred):
 
 def main():
     parser = argparse.ArgumentParser(description='Fine-tune/evaluate FinBERT-style transformer baseline.')
-    parser.add_argument('--data', required=True)
+    parser.add_argument('--data', default=None, help='Standardized CSV. Auto-detected from data/processed/latest.csv if omitted.')
     parser.add_argument('--text_col', default=None)
     parser.add_argument('--label_col', default=None)
     parser.add_argument('--model_name', default='ProsusAI/finbert')
@@ -51,15 +71,31 @@ def main():
     parser.add_argument('--epochs', type=float, default=3)
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--learning_rate', type=float, default=2e-5)
+    parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--fp16', dest='fp16', action='store_true', help='Force fp16 (default: auto-on when CUDA is available).')
+    parser.add_argument('--no_fp16', dest='fp16', action='store_false')
+    parser.set_defaults(fp16=None)
+    parser.add_argument('--early_stopping_patience', type=int, default=2)
+    parser.add_argument('--gradient_accumulation_steps', type=int, default=1)
+    parser.add_argument('--warmup_ratio', type=float, default=0.1)
     parser.add_argument('--results_dir', default='results')
     parser.add_argument('--figures_dir', default='figures')
     parser.add_argument('--models_dir', default='models')
     args = parser.parse_args()
 
+    set_global_seeds(args.seed)
+    if not args.data:
+        from cara_finsent.data_utils import auto_detect_data
+        args.data = str(auto_detect_data())
+        print(f'[AUTO] data = {args.data}')
+    has_cuda = torch.cuda.is_available()
+    use_fp16 = args.fp16 if args.fp16 is not None else has_cuda
+    print(f'[INFO] device={"cuda:" + torch.cuda.get_device_name(0) if has_cuda else "cpu"} fp16={use_fp16} seed={args.seed}')
+
     ts = timestamp()
     df = load_standardized_csv(args.data, args.text_col, args.label_col)
-    df = apply_max_rows(df, args.max_rows)
-    train_df, val_df, test_df = split_dataframe(df)
+    df = apply_max_rows(df, args.max_rows, seed=args.seed)
+    train_df, val_df, test_df = split_dataframe(df, seed=args.seed)
 
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
     model = AutoModelForSequenceClassification.from_pretrained(args.model_name, num_labels=3, label2id=LABEL2ID, id2label=ID2LABEL, ignore_mismatched_sizes=True)
@@ -79,8 +115,14 @@ def main():
         per_device_eval_batch_size=args.batch_size,
         learning_rate=args.learning_rate,
         save_strategy='epoch',
+        save_total_limit=2,
         load_best_model_at_end=True,
         metric_for_best_model='macro_f1',
+        greater_is_better=True,
+        gradient_accumulation_steps=args.gradient_accumulation_steps,
+        warmup_ratio=args.warmup_ratio,
+        fp16=use_fp16,
+        seed=args.seed,
         logging_steps=25,
         report_to='none',
     )
@@ -88,7 +130,8 @@ def main():
         training_args = TrainingArguments(eval_strategy='epoch', **training_kwargs)
     except TypeError:
         training_args = TrainingArguments(evaluation_strategy='epoch', **training_kwargs)
-    trainer = Trainer(model=model, args=training_args, train_dataset=train_ds, eval_dataset=val_ds, compute_metrics=compute_metrics)
+    callbacks = [EarlyStoppingCallback(early_stopping_patience=args.early_stopping_patience)] if args.early_stopping_patience > 0 else []
+    trainer = Trainer(model=model, args=training_args, train_dataset=train_ds, eval_dataset=val_ds, compute_metrics=compute_metrics, callbacks=callbacks)
 
     start = time.perf_counter()
     trainer.train()
@@ -104,7 +147,17 @@ def main():
     summary['train_plus_infer_seconds'] = elapsed
     summary['train_rows'] = len(train_df)
     summary['test_rows'] = len(test_df)
+    summary['seed'] = args.seed
+    summary['fp16'] = use_fp16
+    summary['device'] = 'cuda' if has_cuda else 'cpu'
     summary_path = save_dataframe(pd.DataFrame([summary]), args.results_dir, 'finbert_baseline_summary', ts)
+
+    # Persist tokenizer + best-model checkpoint together (self-contained).
+    try:
+        trainer.save_model(out_dir)
+        tokenizer.save_pretrained(out_dir)
+    except Exception as exc:
+        print(f'[WARN] Failed to save tokenizer/model: {exc}')
 
     pred_df = test_df[['id', 'text', 'label']].copy()
     pred_df['prediction'] = y_pred

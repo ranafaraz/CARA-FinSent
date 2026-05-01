@@ -14,8 +14,14 @@ from datetime import datetime
 import pandas as pd
 
 from cara_finsent.feature_extractor import FinancialFeatureExtractor, weak_lexicon_label
-from cara_finsent.io_utils import save_dataframe, timestamp, write_manifest
+from cara_finsent.io_utils import save_dataframe, save_skip_report, timestamp, write_manifest
 from cara_finsent.sec_utils import fetch_filing_text, fetch_submissions, load_ticker_cik_map, rough_extract_item, sleep_polite
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 
 
 def main():
@@ -40,11 +46,18 @@ def main():
     extractor = FinancialFeatureExtractor()
 
     rows = []
+    skipped_sources = []
     for ticker in args.tickers:
         ticker = ticker.upper()
         cik = ticker_map.get(ticker)
         if not cik:
             print(f'[WARN] No CIK found for {ticker}')
+            skipped_sources.append({
+                'source': 'sec',
+                'ticker': ticker,
+                'reason': 'No CIK found',
+                'action': 'skipped',
+            })
             continue
         try:
             sub = fetch_submissions(cik, user_agent)
@@ -89,13 +102,41 @@ def main():
                     print(f'[OK] {ticker} {filing_date} {acc}')
                 except Exception as exc:
                     print(f'[WARN] {ticker} {acc} failed: {exc}')
+                    skipped_sources.append({
+                        'source': 'sec',
+                        'ticker': ticker,
+                        'accession': acc,
+                        'reason': str(exc),
+                        'action': 'skipped',
+                    })
                 sleep_polite(args.sleep)
         except Exception as exc:
             print(f'[WARN] {ticker} failed: {exc}')
+            skipped_sources.append({
+                'source': 'sec',
+                'ticker': ticker,
+                'reason': str(exc),
+                'action': 'skipped',
+            })
 
     df = pd.DataFrame(rows)
     path = save_dataframe(df, args.output_dir, 'sec_10k_weak_sentiment', ts)
-    manifest = write_manifest('results', 'sec_10k_collection', {'sec_10k_csv': str(path)}, {'rows': int(len(df)), 'tickers': args.tickers, 'years': args.years}, ts)
+    skip_report_path = save_skip_report(skipped_sources, 'results', 'sec_10k_skipped_sources', ts)
+    files = {'sec_10k_csv': str(path)}
+    if skip_report_path is not None:
+        files['skip_report_csv'] = str(skip_report_path)
+    manifest = write_manifest(
+        'results',
+        'sec_10k_collection',
+        files,
+        {
+            'rows': int(len(df)),
+            'tickers': args.tickers,
+            'years': args.years,
+            'skipped_sources_count': len(skipped_sources),
+        },
+        ts,
+    )
     print(f'[DONE] Saved {len(df)} rows -> {path}')
     print(f'[DONE] Manifest -> {manifest}')
 

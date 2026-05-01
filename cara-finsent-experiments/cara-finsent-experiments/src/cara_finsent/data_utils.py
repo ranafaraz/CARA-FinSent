@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import random
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -8,6 +10,67 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 
 STANDARD_LABELS = ['negative', 'neutral', 'positive']
+
+
+def set_global_seeds(seed: int = 42) -> int:
+    """Pin Python, NumPy, and (if installed) PyTorch / Transformers seeds.
+
+    Safe to call from any script. Returns the seed for logging convenience.
+    """
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    try:
+        import torch  # type: ignore
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+    except Exception:
+        pass
+    try:
+        from transformers import set_seed as _hf_set_seed  # type: ignore
+        _hf_set_seed(seed)
+    except Exception:
+        pass
+    return int(seed)
+
+
+def find_latest_csv(directory: str | Path, pattern: str) -> Optional[Path]:
+    """Return the most-recently modified CSV matching glob `pattern` anywhere under `directory`.
+
+    Uses ``rglob`` so it descends into date-stamped subfolders created by
+    ``io_utils.timestamped_path``.
+    """
+    directory = Path(directory)
+    if not directory.exists():
+        return None
+    matches = sorted(directory.rglob(pattern), key=lambda p: p.stat().st_mtime, reverse=True)
+    return matches[0] if matches else None
+
+
+def auto_detect_data(base_dir: str | Path = 'data/processed') -> Path:
+    """Auto-detect the latest prepared dataset CSV without user input.
+
+    Priority
+    --------
+    1. ``data/processed/latest.csv``  — written by script 00 on every run.
+    2. Latest ``combined_standardized_*.csv`` anywhere under *base_dir*.
+
+    Raises ``SystemExit`` with a clear actionable message if nothing is found.
+    """
+    base = Path(base_dir)
+    latest = base / 'latest.csv'
+    if latest.exists():
+        return latest
+    if base.exists():
+        matches = sorted(base.rglob('combined_standardized_*.csv'),
+                         key=lambda p: p.stat().st_mtime, reverse=True)
+        if matches:
+            return matches[0]
+    raise SystemExit(
+        f'No prepared dataset found in {base_dir}/. '
+        'Run `make prepare` first to download Financial PhraseBank + FiQA from Hugging Face.'
+    )
 TEXT_CANDIDATES = ['text', 'sentence', 'Sentence', 'headline', 'title', 'body', 'content', 'summary']
 LABEL_CANDIDATES = ['label', 'sentiment', 'Sentiment', 'target', 'class', 'weak_label']
 

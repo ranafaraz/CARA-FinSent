@@ -11,12 +11,22 @@ import os
 from datetime import datetime
 from urllib.parse import urlencode
 
-import feedparser
 import pandas as pd
 import requests
 
+try:
+    import feedparser
+except ImportError:
+    feedparser = None
+
 from cara_finsent.feature_extractor import FinancialFeatureExtractor, weak_lexicon_label
-from cara_finsent.io_utils import save_dataframe, timestamp, write_manifest
+from cara_finsent.io_utils import save_dataframe, save_skip_report, timestamp, write_manifest
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 
 DEFAULT_RSS = [
     'https://feeds.marketwatch.com/marketwatch/topstories/',
@@ -28,6 +38,12 @@ DEFAULT_RSS = [
 
 def collect_rss(urls):
     rows = []
+    skipped = []
+    if feedparser is None:
+        for url in urls:
+            skipped.append({'source': 'rss', 'endpoint': url, 'reason': 'feedparser package is not installed', 'action': 'skipped'})
+        print('[WARN] RSS collection skipped: feedparser package is not installed.')
+        return rows, skipped
     for url in urls:
         try:
             feed = feedparser.parse(url)
@@ -49,32 +65,38 @@ def collect_rss(urls):
             print(f'[OK] RSS {url}: {len(feed.entries)} entries')
         except Exception as exc:
             print(f'[WARN] RSS {url} failed: {exc}')
-    return rows
+            skipped.append({'source': 'rss', 'endpoint': url, 'reason': str(exc), 'action': 'skipped'})
+    return rows, skipped
 
 
 def collect_newsapi(query: str, page_size: int = 100):
     key = os.getenv('NEWSAPI_KEY')
     if not key:
-        return []
+        return [], [{'source': 'newsapi', 'reason': 'NEWSAPI_KEY not set', 'action': 'skipped'}]
     params = {'q': query, 'language': 'en', 'sortBy': 'publishedAt', 'pageSize': page_size, 'apiKey': key}
     url = 'https://newsapi.org/v2/everything?' + urlencode(params)
-    r = requests.get(url, timeout=30)
-    r.raise_for_status()
-    data = r.json()
-    rows = []
-    for a in data.get('articles', []):
-        title = a.get('title') or ''
-        desc = a.get('description') or ''
-        rows.append({'id': a.get('url'), 'source_dataset': 'newsapi', 'source': (a.get('source') or {}).get('name'), 'published_at': a.get('publishedAt'), 'title': title, 'summary': desc, 'text': f'{title}. {desc}', 'source_url': a.get('url')})
-    print(f'[OK] NewsAPI: {len(rows)} entries')
-    return rows
+    try:
+        r = requests.get(url, timeout=30)
+        r.raise_for_status()
+        data = r.json()
+        rows = []
+        for a in data.get('articles', []):
+            title = a.get('title') or ''
+            desc = a.get('description') or ''
+            rows.append({'id': a.get('url'), 'source_dataset': 'newsapi', 'source': (a.get('source') or {}).get('name'), 'published_at': a.get('publishedAt'), 'title': title, 'summary': desc, 'text': f'{title}. {desc}', 'source_url': a.get('url')})
+        print(f'[OK] NewsAPI: {len(rows)} entries')
+        return rows, []
+    except Exception as exc:
+        print(f'[WARN] NewsAPI failed: {exc}')
+        return [], [{'source': 'newsapi', 'reason': str(exc), 'action': 'skipped'}]
 
 
 def collect_finnhub(symbols):
     key = os.getenv('FINNHUB_API_KEY')
     if not key:
-        return []
+        return [], [{'source': 'finnhub', 'reason': 'FINNHUB_API_KEY not set', 'action': 'skipped'}]
     rows = []
+    skipped = []
     today = datetime.utcnow().date().isoformat()
     # Uses latest company news for a short window. Adjust manually for broader collection.
     for symbol in symbols:
@@ -89,7 +111,8 @@ def collect_finnhub(symbols):
             print(f'[OK] Finnhub {symbol}')
         except Exception as exc:
             print(f'[WARN] Finnhub {symbol} failed: {exc}')
-    return rows
+            skipped.append({'source': 'finnhub', 'symbol': symbol, 'reason': str(exc), 'action': 'skipped'})
+    return rows, skipped
 
 
 def main():
@@ -104,11 +127,15 @@ def main():
     args = parser.parse_args()
 
     ts = timestamp()
-    rows = collect_rss(args.rss_urls)
+    rows, skipped_sources = collect_rss(args.rss_urls)
     if args.include_newsapi:
-        rows += collect_newsapi(args.query)
+        newsapi_rows, newsapi_skipped = collect_newsapi(args.query)
+        rows += newsapi_rows
+        skipped_sources += newsapi_skipped
     if args.include_finnhub:
-        rows += collect_finnhub(args.symbols)
+        finnhub_rows, finnhub_skipped = collect_finnhub(args.symbols)
+        rows += finnhub_rows
+        skipped_sources += finnhub_skipped
 
     df = pd.DataFrame(rows).drop_duplicates(subset=['source_url', 'title']) if rows else pd.DataFrame()
     if args.weak_label and len(df):
@@ -119,7 +146,21 @@ def main():
         df['label'] = df['weak_label']
 
     path = save_dataframe(df, args.output_dir, 'financial_news_headlines', ts)
-    manifest = write_manifest('results', 'financial_news_collection', {'financial_news_csv': str(path)}, {'rows': int(len(df)), 'weak_label': args.weak_label}, ts)
+    skip_report_path = save_skip_report(skipped_sources, 'results', 'financial_news_skipped_sources', ts)
+    files = {'financial_news_csv': str(path)}
+    if skip_report_path is not None:
+        files['skip_report_csv'] = str(skip_report_path)
+    manifest = write_manifest(
+        'results',
+        'financial_news_collection',
+        files,
+        {
+            'rows': int(len(df)),
+            'weak_label': args.weak_label,
+            'skipped_sources_count': len(skipped_sources),
+        },
+        ts,
+    )
     print(f'[DONE] Saved {len(df)} rows -> {path}')
     print(f'[DONE] Manifest -> {manifest}')
 

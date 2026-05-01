@@ -15,7 +15,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.svm import LinearSVC
 
-from cara_finsent.data_utils import apply_max_rows, load_standardized_csv, split_dataframe
+from cara_finsent.data_utils import apply_max_rows, load_standardized_csv, set_global_seeds, split_dataframe
 from cara_finsent.io_utils import save_dataframe, timestamp, write_manifest
 from cara_finsent.metrics import classwise_metrics, confusion_matrix_df, metrics_with_optional_proba
 from cara_finsent.retrieval import TfidfRetriever, augment_with_context
@@ -23,18 +23,24 @@ from cara_finsent.retrieval import TfidfRetriever, augment_with_context
 
 def main():
     parser = argparse.ArgumentParser(description='Test whether retrieval context improves sentiment classification.')
-    parser.add_argument('--data', required=True)
+    parser.add_argument('--data', default=None, help='Standardized CSV. Auto-detected from data/processed/latest.csv if omitted.')
     parser.add_argument('--external_corpus_csv', default=None, help='Optional raw corpus with a text/headline/title column for retrieval context.')
     parser.add_argument('--text_col', default=None)
     parser.add_argument('--label_col', default=None)
     parser.add_argument('--max_rows', type=int, default=None)
     parser.add_argument('--top_k', type=int, default=3)
+    parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--results_dir', default='results')
     args = parser.parse_args()
 
+    set_global_seeds(args.seed)
+    if not args.data:
+        from cara_finsent.data_utils import auto_detect_data
+        args.data = str(auto_detect_data())
+        print(f'[AUTO] data = {args.data}')
     ts = timestamp()
-    df = apply_max_rows(load_standardized_csv(args.data, args.text_col, args.label_col), args.max_rows)
-    train_df, val_df, test_df = split_dataframe(df)
+    df = apply_max_rows(load_standardized_csv(args.data, args.text_col, args.label_col), args.max_rows, seed=args.seed)
+    train_df, val_df, test_df = split_dataframe(df, seed=args.seed)
 
     corpus = train_df['text'].astype(str).tolist()
     if args.external_corpus_csv:
@@ -45,10 +51,10 @@ def main():
     test_aug, test_ctx = augment_with_context(test_df['text'], retriever, top_k=args.top_k)
 
     experiments = [
-        ('no_retrieval_logistic_regression', train_df['text'], test_df['text'], LogisticRegression(max_iter=2000, class_weight='balanced', n_jobs=-1)),
-        ('retrieval_logistic_regression', train_aug, test_aug, LogisticRegression(max_iter=2000, class_weight='balanced', n_jobs=-1)),
-        ('no_retrieval_linear_svm', train_df['text'], test_df['text'], LinearSVC(class_weight='balanced')),
-        ('retrieval_linear_svm', train_aug, test_aug, LinearSVC(class_weight='balanced')),
+        ('no_retrieval_logistic_regression', train_df['text'], test_df['text'], LogisticRegression(max_iter=2000, class_weight='balanced', n_jobs=-1, random_state=args.seed)),
+        ('retrieval_logistic_regression', train_aug, test_aug, LogisticRegression(max_iter=2000, class_weight='balanced', n_jobs=-1, random_state=args.seed)),
+        ('no_retrieval_linear_svm', train_df['text'], test_df['text'], LinearSVC(class_weight='balanced', random_state=args.seed)),
+        ('retrieval_linear_svm', train_aug, test_aug, LinearSVC(class_weight='balanced', random_state=args.seed)),
     ]
     rows = []
     preds = []
@@ -64,6 +70,7 @@ def main():
         m = metrics_with_optional_proba(test_df['label'], y_pred, proba, model_name=name)
         m['seconds'] = elapsed
         m['top_k'] = args.top_k
+        m['seed'] = args.seed
         rows.append(m)
         pred_df = test_df[['id', 'text', 'label']].copy()
         pred_df['model'] = name

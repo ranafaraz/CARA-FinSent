@@ -24,6 +24,8 @@ results/*_classwise_metrics_*.csv
 results/*_reliability_bins_*.csv
 results/*_abstention_curve_*.csv
 figures/*.png
+results/*_skipped_sources_*.csv
+results/pipeline_step_report_*.csv
 ```
 
 ## What I will analyze after you send results

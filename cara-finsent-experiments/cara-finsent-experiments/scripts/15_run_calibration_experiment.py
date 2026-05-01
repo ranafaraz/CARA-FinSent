@@ -16,17 +16,17 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.svm import LinearSVC
 
-from cara_finsent.data_utils import apply_max_rows, load_standardized_csv, split_dataframe
+from cara_finsent.data_utils import apply_max_rows, load_standardized_csv, set_global_seeds, split_dataframe
 from cara_finsent.io_utils import save_dataframe, timestamp, write_manifest
-from cara_finsent.metrics import abstention_curve, classwise_metrics, confusion_matrix_df, metrics_with_optional_proba, reliability_bins
+from cara_finsent.metrics import abstention_curve, classwise_metrics, confusion_matrix_df, expected_calibration_error, metrics_with_optional_proba, reliability_bins
 from cara_finsent.plotting import save_reliability_plot
 
 
-def calibrated_estimator(base_name: str, method: str, cv: int):
+def calibrated_estimator(base_name: str, method: str, cv: int, seed: int = 42):
     if base_name == 'linear_svm':
-        base = LinearSVC(class_weight='balanced')
+        base = LinearSVC(class_weight='balanced', random_state=seed)
     elif base_name == 'logistic_regression':
-        base = LogisticRegression(max_iter=2000, class_weight='balanced', n_jobs=-1)
+        base = LogisticRegression(max_iter=2000, class_weight='balanced', n_jobs=-1, random_state=seed)
     else:
         raise ValueError(base_name)
     try:
@@ -37,27 +37,36 @@ def calibrated_estimator(base_name: str, method: str, cv: int):
 
 def main():
     parser = argparse.ArgumentParser(description='Run calibration and abstention experiments.')
-    parser.add_argument('--data', required=True)
+    parser.add_argument('--data', default=None, help='Standardized CSV. Auto-detected from data/processed/latest.csv if omitted.')
     parser.add_argument('--text_col', default=None)
     parser.add_argument('--label_col', default=None)
     parser.add_argument('--base_model', choices=['logistic_regression', 'linear_svm'], default='linear_svm')
     parser.add_argument('--method', choices=['sigmoid', 'isotonic'], default='sigmoid')
+    parser.add_argument('--n_bins', type=int, default=10, help='Reliability/ECE bin count.')
+    parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--max_rows', type=int, default=None)
     parser.add_argument('--results_dir', default='results')
     parser.add_argument('--figures_dir', default='figures')
     args = parser.parse_args()
 
+    set_global_seeds(args.seed)
+    if not args.data:
+        from cara_finsent.data_utils import auto_detect_data
+        args.data = str(auto_detect_data())
+        print(f'[AUTO] data = {args.data}')
     ts = timestamp()
-    df = apply_max_rows(load_standardized_csv(args.data, args.text_col, args.label_col), args.max_rows)
-    train_df, val_df, test_df = split_dataframe(df)
+    df = apply_max_rows(load_standardized_csv(args.data, args.text_col, args.label_col), args.max_rows, seed=args.seed)
+    train_df, val_df, test_df = split_dataframe(df, seed=args.seed)
 
     min_class_count = int(train_df['label'].value_counts().min())
     if min_class_count < 2:
         raise SystemExit('Calibration requires at least 2 training examples per class. Use more data or reduce filtering.')
+    if args.method == 'isotonic' and min_class_count < 50:
+        print(f'[WARN] isotonic calibration requested but min class count is {min_class_count}; results may be unstable. Consider --method sigmoid.')
     cv = max(2, min(5, min_class_count))
     model = Pipeline([
         ('tfidf', TfidfVectorizer(max_features=50000, ngram_range=(1, 2), stop_words='english')),
-        ('clf', calibrated_estimator(args.base_model, args.method, cv=cv)),
+        ('clf', calibrated_estimator(args.base_model, args.method, cv=cv, seed=args.seed)),
     ])
     start = time.perf_counter()
     model.fit(train_df['text'], train_df['label'])
@@ -68,6 +77,10 @@ def main():
     summary = metrics_with_optional_proba(test_df['label'], y_pred, y_proba, model_name=f'calibrated_{args.base_model}_{args.method}')
     summary['seconds'] = elapsed
     summary['calibration_method'] = args.method
+    summary['n_bins'] = args.n_bins
+    summary['seed'] = args.seed
+    if args.n_bins != 10:
+        summary[f'ece_{args.n_bins}_bins'] = expected_calibration_error(test_df['label'], y_pred, y_proba, n_bins=args.n_bins)
     summary_path = save_dataframe(pd.DataFrame([summary]), args.results_dir, 'calibration_summary', ts)
 
     pred_df = test_df[['id', 'text', 'label']].copy()
@@ -77,7 +90,7 @@ def main():
         pred_df[f'proba_{cls}'] = y_proba[:, i]
     pred_path = save_dataframe(pred_df, args.results_dir, 'calibration_predictions', ts)
 
-    bins = reliability_bins(test_df['label'], y_pred, y_proba)
+    bins = reliability_bins(test_df['label'], y_pred, y_proba, n_bins=args.n_bins)
     bins_path = save_dataframe(bins, args.results_dir, 'calibration_reliability_bins', ts)
     abst = abstention_curve(test_df['label'], y_pred, y_proba)
     abst_path = save_dataframe(abst, args.results_dir, 'calibration_abstention_curve', ts)
