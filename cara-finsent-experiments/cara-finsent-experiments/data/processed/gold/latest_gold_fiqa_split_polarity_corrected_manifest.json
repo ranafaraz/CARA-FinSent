@@ -1,0 +1,22 @@
+{
+  "phase": "phase14_step7_fiqa_polarity_correction",
+  "source_raw": "data\\processed\\gold\\latest_gold_fiqa_split.csv",
+  "output_corrected": "data\\processed\\gold\\latest_gold_fiqa_split_polarity_corrected.csv",
+  "rows": 1111,
+  "rows_swapped_pos_neg": 1027,
+  "rows_unchanged_neutral": 84,
+  "swap_rule": "positive <-> negative; neutral unchanged",
+  "pre_label_counts": {
+    "negative": 682,
+    "positive": 345,
+    "neutral": 84
+  },
+  "post_label_counts": {
+    "positive": 682,
+    "negative": 345,
+    "neutral": 84
+  },
+  "reason": "PHASE13_FIQA_LABEL_POLARITY_BUG.md confirmed FiQA gold split has positive/negative inverted at source. This file is the cleaned derivative; raw is preserved unchanged.",
+  "git_commit_sha": "36dae7f7408731430d3806d2a5218af7a1dacf7c",
+  "generated_at_utc": "20260502_165943"
+}

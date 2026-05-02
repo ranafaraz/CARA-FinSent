@@ -1,0 +1,35 @@
+{
+  "phase": "phase14_step5_clean_ensemble",
+  "sources": {
+    "zs": {
+      "val": "results/2026-05-02/phase14_predictions/finbert_zero_shot_val_predictions_20260502_150023.csv",
+      "test": "results/2026-05-02/phase14_predictions/finbert_zero_shot_test_predictions_20260502_150023.csv"
+    },
+    "ft": {
+      "val": "results/2026-05-02/phase14_predictions/finbert_fine_tuned_val_predictions_20260502_150824.csv",
+      "test": "results/2026-05-02/phase14_predictions/finbert_fine_tuned_test_predictions_20260502_150824.csv"
+    },
+    "aw": {
+      "val": "results/2026-05-02/phase14_predictions/finbert_agreement_weighted_val_predictions_20260502_165409.csv",
+      "test": "results/2026-05-02/phase14_predictions/finbert_agreement_weighted_test_predictions_20260502_165409.csv"
+    }
+  },
+  "val_n": 479,
+  "test_n": 959,
+  "manual_weights_normalised": {
+    "aw": 0.5,
+    "zs": 0.3,
+    "ft": 0.2
+  },
+  "val_tuned_grid_weights": {
+    "aw": 0.4,
+    "zs": 0.6,
+    "ft": 0.0,
+    "val_macro_f1": 0.9098976258222683
+  },
+  "bootstrap_n": 2000,
+  "split_seed": 42,
+  "fit_rule": "val-only tune, test-only eval",
+  "git_commit_sha": "36dae7f7408731430d3806d2a5218af7a1dacf7c",
+  "generated_at_utc": "20260502_165749"
+}

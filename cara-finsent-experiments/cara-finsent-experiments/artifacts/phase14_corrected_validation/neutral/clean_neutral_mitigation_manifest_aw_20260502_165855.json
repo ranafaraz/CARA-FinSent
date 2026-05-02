@@ -1,0 +1,32 @@
+{
+  "phase": "phase14_step6_clean_neutral_mitigation",
+  "model_label": "aw",
+  "val_predictions": "results/2026-05-02/phase14_predictions/finbert_agreement_weighted_val_predictions_20260502_165409.csv",
+  "test_predictions": "results/2026-05-02/phase14_predictions/finbert_agreement_weighted_test_predictions_20260502_165409.csv",
+  "val_n": 479,
+  "test_n": 959,
+  "margins_swept": [
+    0.02,
+    0.04,
+    0.06,
+    0.08,
+    0.1,
+    0.2,
+    0.3,
+    0.4,
+    0.5
+  ],
+  "max_f1_drop_constraint": 0.002,
+  "selected_margin": 0.0,
+  "val_macro_f1_baseline": 0.8897687830948818,
+  "val_macro_f1_selected": 0.8897687830948818,
+  "val_neutral_recall_baseline": 0.9372822299651568,
+  "val_neutral_recall_selected": 0.9372822299651568,
+  "test_macro_f1_baseline": 0.8647984652053613,
+  "test_macro_f1_selected": 0.8647984652053613,
+  "test_neutral_recall_selected": 0.9041811846689896,
+  "test_neutral_to_positive_errors_selected": 51,
+  "fit_rule": "val-only select, test-only eval",
+  "git_commit_sha": "36dae7f7408731430d3806d2a5218af7a1dacf7c",
+  "generated_at_utc": "20260502_165855"
+}
