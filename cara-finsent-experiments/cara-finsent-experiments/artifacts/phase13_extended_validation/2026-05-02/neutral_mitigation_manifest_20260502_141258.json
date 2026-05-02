@@ -1,0 +1,22 @@
+{
+  "phase": "phase13_step4_neutral_mitigation",
+  "aw_predictions_source": "results/2026-05-02/finbert_agreement_weighted_predictions_20260502_082228.csv",
+  "margins_swept": [
+    0.02,
+    0.04,
+    0.06,
+    0.08,
+    0.1
+  ],
+  "override_rule": "prediction == 'positive' AND (proba_positive - proba_neutral) < margin -> 'neutral'",
+  "note_probs_unchanged": "Only the argmax label is overridden; probability vector is preserved as-is so calibration metrics remain comparable.",
+  "baseline_neutral_to_positive_errors": 41,
+  "baseline_macro_f1": 0.8859972450299,
+  "git_commit_sha": "082c69df25d269f6dea1ab6a2543d38c055bbcd3",
+  "generated_at_utc": "20260502_141258",
+  "caveats": [
+    "Override is decision-only (probs unchanged); ECE differences across margins reflect the bin reassignment of overridden cases, not a true recalibration.",
+    "Single-checkpoint AW predictions; not seed-averaged.",
+    "Best margin is selected on test data; for an honest deployment the margin should be tuned on a held-out val/calib split."
+  ]
+}

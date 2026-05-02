@@ -1,0 +1,31 @@
+{
+  "phase": "phase13_step2_external_validation",
+  "dataset_name": "fiqa",
+  "dataset_file": "data/processed/gold/latest_gold_fiqa_split.csv",
+  "eval_split": "test",
+  "n_samples_test": 223,
+  "label_distribution_test": {
+    "positive": 137,
+    "negative": 69,
+    "neutral": 17
+  },
+  "zero_shot_model": "ProsusAI/finbert",
+  "finetuned_checkpoints": [
+    "models/finbert_20260430_215910",
+    "models/finbert_20260501_090136",
+    "models/finbert_20260501_193637"
+  ],
+  "agreement_weighted_evaluated": false,
+  "agreement_weighted_skipped_reason": "No AW checkpoint on disk (Kaggle-trained; weights not synced back). Documented in docs/PHASE13_BASELINE_SNAPSHOT.md.",
+  "text_hash_leakage_count": 0,
+  "git_commit_sha": "082c69df25d269f6dea1ab6a2543d38c055bbcd3",
+  "generated_at_utc": "20260502_140602",
+  "label_polarity_corrected": true,
+  "label_polarity_correction_reason": "FiQA gold split has positive<->negative inverted at the source data layer. See docs/PHASE13_FIQA_LABEL_POLARITY_BUG.md.",
+  "caveats": [
+    "Vanilla fine-tuned results are per-checkpoint, not 5-seed averaged.",
+    "FiQA gold split is the only external dataset evaluated in this run.",
+    "No claim of SOTA is made on FiQA; this run is for reliability validation only.",
+    "FiQA labels were polarity-corrected at runtime; raw gold remains uncorrected on disk."
+  ]
+}

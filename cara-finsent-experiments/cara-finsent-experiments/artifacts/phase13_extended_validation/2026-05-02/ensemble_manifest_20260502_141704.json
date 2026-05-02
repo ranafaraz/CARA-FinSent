@@ -1,0 +1,32 @@
+{
+  "phase": "phase13_step5_probability_ensemble",
+  "sources": {
+    "zs": "results/2026-05-02/finbert_baseline_predictions_20260502_081128.csv",
+    "ft": "results/2026-05-02/finbert_baseline_predictions_20260502_081140.csv",
+    "aw": "results/2026-05-02/finbert_agreement_weighted_predictions_20260502_082228.csv"
+  },
+  "merged_n": 959,
+  "calib_n": 479,
+  "eval_n": 480,
+  "split_seed": 42,
+  "bootstrap_n": 2000,
+  "manual_weights_normalised": {
+    "aw": 0.5,
+    "zs": 0.3,
+    "ft": 0.2
+  },
+  "grid_best_weights": {
+    "aw": 0.0,
+    "zs": 0.4,
+    "ft": 0.6,
+    "calib_macro_f1": 0.8944125646724569
+  },
+  "caveats": [
+    "grid_search and stacked_LR results are reported on the eval half of a 50/50 stratified split; baselines are also re-evaluated on that subset for the paired test.",
+    "simple_mean and manual_weighted are reported on the full merged test set.",
+    "No re-training is performed; this is a pure post-hoc combination over frozen probabilities.",
+    "AW source is a single seed; ensemble result inherits that seed."
+  ],
+  "git_commit_sha": "082c69df25d269f6dea1ab6a2543d38c055bbcd3",
+  "generated_at_utc": "20260502_141704"
+}

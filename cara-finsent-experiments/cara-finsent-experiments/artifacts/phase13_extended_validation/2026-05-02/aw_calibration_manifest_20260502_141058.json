@@ -1,0 +1,20 @@
+{
+  "phase": "phase13_step3_aw_calibration",
+  "aw_predictions_source": "results/2026-05-02/finbert_agreement_weighted_predictions_20260502_082228.csv",
+  "calib_n": 479,
+  "eval_n": 480,
+  "calib_size_fraction": 0.5,
+  "split_seed": 42,
+  "methods_evaluated": [
+    "temperature_scaling",
+    "platt_multinomial_LR",
+    "per_class_isotonic"
+  ],
+  "caveats": [
+    "No AW val-split probabilities on disk; calibrators fit on stratified split of AW test.",
+    "Temperature scaling treats log(probs) as logits since raw logits were not stored.",
+    "All metrics are reported on the held-out eval portion of the test split (apples-to-apples)."
+  ],
+  "git_commit_sha": "082c69df25d269f6dea1ab6a2543d38c055bbcd3",
+  "generated_at_utc": "20260502_141058"
+}
