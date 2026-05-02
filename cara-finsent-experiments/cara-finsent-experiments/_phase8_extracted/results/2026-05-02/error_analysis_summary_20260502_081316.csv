@@ -1,2 +1,0 @@
-model,dataset_name,rows,errors,error_rate,neutral_as_positive,neutral_as_negative,positive_as_negative,negative_as_positive,mean_confidence_correct,mean_confidence_wrong,overconfident_wrong_count,low_confidence_correct_count
-finbert_zero_shot,phrasebank,959,108,0.11261730969760167,50,4,3,4,0.9757148533137484,0.8736759123148149,78,8

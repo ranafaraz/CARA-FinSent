@@ -44,3 +44,15 @@ dev_plan/
 # Operational secrets: GPU pod IDs, SSH endpoints, API tokens, runtime notes
 memory/
 
+# Phase 9: prevent re-introducing bulky runtime artifacts and caches
+_phase8_extracted/
+artifacts/**/*.zip
+artifacts/**/*.tgz
+artifacts/**/raw_predictions/
+artifacts/**/checkpoints/
+.cache/
+wandb/
+.tmp_kaggle_kernel/
+cara_phase8_results.tgz
+cara_phase9_results.tgz
+

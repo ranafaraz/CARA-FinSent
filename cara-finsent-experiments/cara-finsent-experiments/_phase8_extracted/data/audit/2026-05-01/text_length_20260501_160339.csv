@@ -1,4 +1,0 @@
-source_dataset,rows,len_min,len_max,len_mean,len_median,len_p95
-financial_phrasebank,4791,7,315,128.11166771029013,119.0,233.0
-fiqa,1213,10,147,74.00741962077494,67.0,135.0
-__overall__,6004,7,315,117.18087941372418,107.0,226.0

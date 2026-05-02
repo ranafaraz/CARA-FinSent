@@ -79,6 +79,9 @@ def check_label_sanity() -> Dict[str, object]:
                   f'{len(files)} mapping artifacts' if files else 'no finbert_label_mapping_*.json found')
 
 
+REQUIRED_EXPERIMENTS = ('classical', 'finbert_zero_shot', 'finbert_finetuned', 'agreement_weighted')
+
+
 def check_seed_count(min_seeds: int) -> Tuple[Dict[str, object], pd.DataFrame]:
     results_dir = PROJECT_ROOT / 'results'
     files = [p for p in results_dir.rglob('seed_sweep_summary_*.csv') if '_archive' not in p.parts]
@@ -90,9 +93,34 @@ def check_seed_count(min_seeds: int) -> Tuple[Dict[str, object], pd.DataFrame]:
     main = counts[counts['dataset_name'] == 'phrasebank']
     if main.empty:
         return _check('min_seed_runs', False, 'no phrasebank rows in seed sweeps'), df
-    ok = bool((main['n_seeds'] >= min_seeds).all())
-    detail = '; '.join(f"{r.experiment}={int(r.n_seeds)}" for r in main.itertuples()) or 'empty'
+
+    present = {r.experiment: int(r.n_seeds) for r in main.itertuples()}
+    missing = [e for e in REQUIRED_EXPERIMENTS if e not in present]
+    under = [f'{e}={present[e]}' for e in REQUIRED_EXPERIMENTS
+             if e in present and present[e] < min_seeds]
+    ok = not missing and not under
+    parts = []
+    for e in REQUIRED_EXPERIMENTS:
+        parts.append(f'{e}={present.get(e, 0)}')
+    detail = '; '.join(parts)
+    if missing:
+        detail += f' | missing: {missing}'
+    if under:
+        detail += f' | under_min_seeds({min_seeds}): {under}'
     return _check('min_seed_runs', ok, detail), df
+
+
+def check_agreement_weighted_seeds(sweep_df: pd.DataFrame, min_seeds: int) -> Dict[str, object]:
+    """Phase 9: agreement_weighted MUST have at least min_seeds unique seeds."""
+    if sweep_df.empty:
+        return _check('agreement_weighted_seed_runs', False, 'no sweep rows to inspect')
+    aw = sweep_df[(sweep_df['experiment'] == 'agreement_weighted')
+                  & (sweep_df['dataset_name'] == 'phrasebank')]
+    n = int(aw['seed'].nunique()) if not aw.empty else 0
+    seeds = sorted({int(s) for s in aw['seed'].unique()}) if not aw.empty else []
+    ok = n >= min_seeds
+    return _check('agreement_weighted_seed_runs', ok,
+                  f'unique_seeds={n} (required {min_seeds}); seeds={seeds}')
 
 
 def check_no_leakage(sweep_df: pd.DataFrame) -> Dict[str, object]:
@@ -164,6 +192,7 @@ def main() -> int:
     rows.append(check_label_sanity())
     seed_check, sweep_df = check_seed_count(args.min_seeds)
     rows.append(seed_check)
+    rows.append(check_agreement_weighted_seeds(sweep_df, args.min_seeds))
     rows.append(check_no_leakage(sweep_df))
     rows.append(check_metadata(sweep_df))
     rows.append(check_calibration_report())

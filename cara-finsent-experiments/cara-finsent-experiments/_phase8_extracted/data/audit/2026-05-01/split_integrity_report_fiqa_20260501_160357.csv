@@ -1,9 +1,0 @@
-check,status,detail
-leakage_train_vs_val,PASS,0 hashes
-leakage_train_vs_test,PASS,0 hashes
-leakage_val_vs_test,PASS,0 hashes
-split_counts,PASS,train=777 val=111 test=223
-label_dist_train,PASS,"{'negative': 477, 'positive': 241, 'neutral': 59}"
-label_dist_val,PASS,"{'negative': 68, 'positive': 35, 'neutral': 8}"
-label_dist_test,PASS,"{'negative': 137, 'positive': 69, 'neutral': 17}"
-leakage_total,PASS,leakage_count=0

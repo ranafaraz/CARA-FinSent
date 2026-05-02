@@ -1,6 +1,0 @@
-check,status,detail
-leakage_train_vs_val,FAIL,87 overlapping text_hash
-leakage_train_vs_test,PASS,0 overlapping text_hash
-leakage_val_vs_test,PASS,0 overlapping text_hash
-leakage_total,FAIL,leakage_count=87
-split_counts,PASS,"train=961, val=87, test=150"

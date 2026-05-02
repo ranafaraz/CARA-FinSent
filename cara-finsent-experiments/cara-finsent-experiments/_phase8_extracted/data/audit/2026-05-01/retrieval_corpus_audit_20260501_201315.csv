@@ -1,2 +1,0 @@
-timestamp_utc,inputs,gold_split_files,gold_hashes,rows_pre_dedup,rows_post_dedup,rows_post_gold_filter,skipped_inputs,corpus_file,latest_file
-20260501_201315,0,2,5902,0,0,0,0,data\retrieval_corpus\2026-05-01\retrieval_corpus_20260501_201315.csv,data\retrieval_corpus\latest_retrieval_corpus.csv

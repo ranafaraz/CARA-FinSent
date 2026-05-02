@@ -1,4 +1,0 @@
-class,precision,recall,f1,support
-negative,0.0,0.0,0.0,119
-neutral,0.5985401459854015,1.0,0.7488584474885845,574
-positive,0.0,0.0,0.0,266

@@ -1,8 +1,0 @@
-{
-  "native_id2label": {
-    "0": "positive",
-    "1": "negative",
-    "2": "neutral"
-  },
-  "test_rows": 3676
-}

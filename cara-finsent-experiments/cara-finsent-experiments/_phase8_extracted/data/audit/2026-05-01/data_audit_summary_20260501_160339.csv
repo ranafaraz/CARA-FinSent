@@ -1,9 +1,0 @@
-check,status,detail
-rows_total,PASS,6004
-missing_text,PASS,0
-missing_label,PASS,0
-invalid_label,PASS,0
-duplicate_text_groups,WARN,87
-duplicate_label_conflicts,PASS,0
-agreement_present,PASS,rows_with_agreement=4791
-overall_status,PASS,gating value
