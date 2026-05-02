@@ -1,0 +1,18 @@
+{
+  "timestamp_utc": "20260501_193129",
+  "input": "data\\processed\\gold\\latest_gold_fiqa.csv",
+  "dataset_name": "fiqa",
+  "seed": 42,
+  "test_size": 0.2,
+  "val_size": 0.1,
+  "rows_after_dedup": 1111,
+  "split_counts": {
+    "train": 777,
+    "test": 223,
+    "val": 111
+  },
+  "output_split_csv": "data\\processed\\gold\\2026-05-01\\fiqa_split_20260501_193129.csv",
+  "latest_alias": "data\\processed\\gold\\latest_gold_fiqa_split.csv",
+  "integrity_report": "data\\audit\\2026-05-01\\split_integrity_report_fiqa_20260501_193129.csv",
+  "overall_status": "PASS"
+}

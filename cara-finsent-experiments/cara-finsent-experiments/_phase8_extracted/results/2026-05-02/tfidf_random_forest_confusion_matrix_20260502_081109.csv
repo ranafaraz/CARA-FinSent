@@ -1,0 +1,4 @@
+actual,pred_negative,pred_neutral,pred_positive
+actual_negative,39,60,20
+actual_neutral,3,549,22
+actual_positive,8,154,104

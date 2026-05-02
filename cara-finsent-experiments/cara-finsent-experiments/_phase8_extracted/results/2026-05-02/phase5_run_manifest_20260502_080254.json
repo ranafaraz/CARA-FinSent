@@ -1,0 +1,108 @@
+{
+  "timestamp": "20260502_080254",
+  "ok": true,
+  "steps": [
+    {
+      "step": "compileall",
+      "cmd": [
+        "/usr/bin/python3",
+        "-m",
+        "compileall",
+        "-q",
+        "src",
+        "scripts"
+      ],
+      "rc": 0,
+      "ok": true
+    },
+    {
+      "step": "audit_datasets",
+      "cmd": [
+        "/usr/bin/python3",
+        "scripts/01_audit_datasets.py",
+        "--inputs",
+        "data/processed/gold/latest_gold_phrasebank_split.csv",
+        "data/processed/gold/latest_gold_fiqa_split.csv"
+      ],
+      "rc": 0,
+      "ok": true
+    },
+    {
+      "step": "finbert_label_mapping",
+      "cmd": [
+        "/usr/bin/python3",
+        "scripts/11d_check_finbert_label_mapping.py",
+        "--sample_file",
+        "data/processed/gold/latest_gold_phrasebank_split.csv"
+      ],
+      "rc": 0,
+      "ok": true
+    },
+    {
+      "step": "seed_sweep",
+      "cmd": [
+        "/usr/bin/python3",
+        "scripts/26_run_seed_sweep.py",
+        "--seeds",
+        "13",
+        "21",
+        "42",
+        "87",
+        "101",
+        "--mode",
+        "full",
+        "--datasets",
+        "phrasebank",
+        "--continue_on_error"
+      ],
+      "rc": 0,
+      "ok": true
+    },
+    {
+      "step": "final_leaderboard",
+      "cmd": [
+        "/usr/bin/python3",
+        "scripts/27_summarize_seed_sweep.py",
+        "--min_seeds",
+        "5"
+      ],
+      "rc": 0,
+      "ok": true
+    },
+    {
+      "step": "calibration_report",
+      "cmd": [
+        "/usr/bin/python3",
+        "scripts/22_calibration_abstention_report.py",
+        "--predictions",
+        "results/2026-05-02/finbert_baseline_predictions_20260502_081140.csv",
+        "--model_name",
+        "finbert_zero_shot",
+        "--dataset_name",
+        "phrasebank"
+      ],
+      "rc": 0,
+      "ok": true
+    },
+    {
+      "step": "error_analysis",
+      "cmd": [
+        "/usr/bin/python3",
+        "scripts/28_error_analysis.py",
+        "--predictions",
+        "results/2026-05-02/finbert_baseline_predictions_20260502_081140.csv",
+        "--model_name",
+        "finbert_zero_shot",
+        "--dataset_name",
+        "phrasebank"
+      ],
+      "rc": 0,
+      "ok": true
+    },
+    {
+      "step": "research_gate",
+      "rc": 0,
+      "ok": true
+    }
+  ]
+}

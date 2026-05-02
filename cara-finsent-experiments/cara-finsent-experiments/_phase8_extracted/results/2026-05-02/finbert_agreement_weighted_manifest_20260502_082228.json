@@ -1,0 +1,53 @@
+{
+  "timestamp_utc": "20260502_082228",
+  "model_name": "ProsusAI/finbert",
+  "dataset_name": "phrasebank",
+  "dataset_file": "data/processed/gold/latest_gold_phrasebank_split.csv",
+  "split_source": "controlled_gold_split",
+  "benchmark_mode": "phrasebank_in_domain",
+  "seed": 13,
+  "training_type": "agreement_weighted_finetuning",
+  "weight_schedule": "linear",
+  "num_epochs": 3,
+  "batch_size": 16,
+  "learning_rate": 2e-05,
+  "train_rows": 3353,
+  "val_rows": 479,
+  "test_rows": 959,
+  "label_distribution": {
+    "train": {
+      "negative": 414,
+      "neutral": 2008,
+      "positive": 931
+    },
+    "val": {
+      "negative": 59,
+      "neutral": 287,
+      "positive": 133
+    },
+    "test": {
+      "negative": 119,
+      "neutral": 574,
+      "positive": 266
+    }
+  },
+  "text_hash_leakage_count": 0,
+  "native_id2label": {
+    "0": "positive",
+    "1": "negative",
+    "2": "neutral"
+  },
+  "canonical_remap": [
+    1,
+    2,
+    0
+  ],
+  "git_commit_sha": "5c8a2bfe88e0e6103c6e8d4532c5070d15dc028e",
+  "accuracy": 0.8894681960375391,
+  "macro_f1": 0.8859972450299,
+  "train_seconds": 89.48389785480686,
+  "eval_seconds": 1.7343794291373342,
+  "checkpoint_dir": "models/finbert_agreement_weighted_linear_20260502_082228",
+  "summary_csv": "results/2026-05-02/finbert_agreement_weighted_summary_20260502_082228.csv",
+  "predictions_csv": "results/2026-05-02/finbert_agreement_weighted_predictions_20260502_082228.csv"
+}

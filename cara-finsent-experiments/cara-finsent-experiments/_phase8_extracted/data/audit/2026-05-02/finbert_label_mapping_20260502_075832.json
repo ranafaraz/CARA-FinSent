@@ -1,0 +1,26 @@
+{
+  "timestamp_utc": "20260502_075832",
+  "model_name": "ProsusAI/finbert",
+  "native_id2label": {
+    "0": "positive",
+    "1": "negative",
+    "2": "neutral"
+  },
+  "native_label2id": {
+    "positive": 0,
+    "negative": 1,
+    "neutral": 2
+  },
+  "canonical_labels": [
+    "negative",
+    "neutral",
+    "positive"
+  ],
+  "native_columns_to_canonical": [
+    1,
+    2,
+    0
+  ],
+  "sanity_csv": "data/audit/2026-05-02/finbert_label_sanity_20260502_075832.csv",
+  "n_samples": 20
+}

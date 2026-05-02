@@ -1,0 +1,51 @@
+{
+  "timestamp_utc": "20260502_080308",
+  "dataset_name": "phrasebank",
+  "data_file": "data/processed/gold/latest_gold_phrasebank_split.csv",
+  "experiments": [
+    "classical",
+    "finbert_zero_shot",
+    "finbert_finetuned",
+    "agreement_weighted"
+  ],
+  "seeds": [
+    13,
+    21,
+    42,
+    87,
+    101
+  ],
+  "finbert_epochs": 3.0,
+  "finbert_batch_size": 16,
+  "weight_schedule": "linear",
+  "rows": 45,
+  "failures": [
+    {
+      "seed": 13,
+      "experiment": "agreement_weighted",
+      "error": "Command '['/usr/bin/python3', '/workspace/CARA-FinSent/cara-finsent-experiments/cara-finsent-experiments/scripts/11f_train_finbert_agreement_weighted.py', '--data', 'data/processed/gold/latest_gold_phrasebank_split.csv', '--dataset_name', 'phrasebank', '--seed', '13', '--results_dir', 'results', '--figures_dir', 'figures', '--num_epochs', '3', '--batch_size', '16', '--weight_schedule', 'linear', '--models_dir', 'models']' returned non-zero exit status 1."
+    },
+    {
+      "seed": 21,
+      "experiment": "agreement_weighted",
+      "error": "Command '['/usr/bin/python3', '/workspace/CARA-FinSent/cara-finsent-experiments/cara-finsent-experiments/scripts/11f_train_finbert_agreement_weighted.py', '--data', 'data/processed/gold/latest_gold_phrasebank_split.csv', '--dataset_name', 'phrasebank', '--seed', '21', '--results_dir', 'results', '--figures_dir', 'figures', '--num_epochs', '3', '--batch_size', '16', '--weight_schedule', 'linear', '--models_dir', 'models']' returned non-zero exit status 1."
+    },
+    {
+      "seed": 42,
+      "experiment": "agreement_weighted",
+      "error": "Command '['/usr/bin/python3', '/workspace/CARA-FinSent/cara-finsent-experiments/cara-finsent-experiments/scripts/11f_train_finbert_agreement_weighted.py', '--data', 'data/processed/gold/latest_gold_phrasebank_split.csv', '--dataset_name', 'phrasebank', '--seed', '42', '--results_dir', 'results', '--figures_dir', 'figures', '--num_epochs', '3', '--batch_size', '16', '--weight_schedule', 'linear', '--models_dir', 'models']' returned non-zero exit status 1."
+    },
+    {
+      "seed": 87,
+      "experiment": "agreement_weighted",
+      "error": "Command '['/usr/bin/python3', '/workspace/CARA-FinSent/cara-finsent-experiments/cara-finsent-experiments/scripts/11f_train_finbert_agreement_weighted.py', '--data', 'data/processed/gold/latest_gold_phrasebank_split.csv', '--dataset_name', 'phrasebank', '--seed', '87', '--results_dir', 'results', '--figures_dir', 'figures', '--num_epochs', '3', '--batch_size', '16', '--weight_schedule', 'linear', '--models_dir', 'models']' returned non-zero exit status 1."
+    },
+    {
+      "seed": 101,
+      "experiment": "agreement_weighted",
+      "error": "Command '['/usr/bin/python3', '/workspace/CARA-FinSent/cara-finsent-experiments/cara-finsent-experiments/scripts/11f_train_finbert_agreement_weighted.py', '--data', 'data/processed/gold/latest_gold_phrasebank_split.csv', '--dataset_name', 'phrasebank', '--seed', '101', '--results_dir', 'results', '--figures_dir', 'figures', '--num_epochs', '3', '--batch_size', '16', '--weight_schedule', 'linear', '--models_dir', 'models']' returned non-zero exit status 1."
+    }
+  ],
+  "summary_file": "results/2026-05-02/seed_sweep_summary_20260502_080308.csv",
+  "git_commit_sha": "5c8a2bfe88e0e6103c6e8d4532c5070d15dc028e"
+}

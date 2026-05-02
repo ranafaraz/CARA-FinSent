@@ -1,0 +1,24 @@
+{
+  "trainer_metrics": {
+    "test_loss": 0.36609217524528503,
+    "test_accuracy": 0.8936392075078207,
+    "test_macro_f1": 0.8901001771823989,
+    "test_weighted_f1": 0.8935175835550028,
+    "test_macro_precision": 0.8919325673170603,
+    "test_macro_recall": 0.8883039737075832,
+    "test_mcc": 0.8059054834793138,
+    "test_runtime": 0.8072,
+    "test_samples_per_second": 1187.994,
+    "test_steps_per_second": 74.327
+  },
+  "native_id2label": {
+    "0": "positive",
+    "1": "negative",
+    "2": "neutral"
+  },
+  "canonical_remap": [
+    1,
+    2,
+    0
+  ]
+}

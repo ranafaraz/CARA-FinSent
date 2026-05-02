@@ -1,0 +1,60 @@
+{
+  "timestamp_utc": "20260502_081317",
+  "min_seeds_required": 5,
+  "checks": [
+    {
+      "check": "compileall",
+      "status": "PASS",
+      "detail": "ok"
+    },
+    {
+      "check": "controlled_gold_splits",
+      "status": "PASS",
+      "detail": "all present"
+    },
+    {
+      "check": "audit_gate",
+      "status": "PASS",
+      "detail": "overall_status=PASS | leakage_status=PASS | audit_gate=PASS"
+    },
+    {
+      "check": "finbert_label_sanity",
+      "status": "PASS",
+      "detail": "7 mapping artifacts"
+    },
+    {
+      "check": "min_seed_runs",
+      "status": "PASS",
+      "detail": "classical=5; finbert_finetuned=5; finbert_zero_shot=5"
+    },
+    {
+      "check": "no_text_hash_leakage",
+      "status": "PASS",
+      "detail": "all zero"
+    },
+    {
+      "check": "result_metadata",
+      "status": "PASS",
+      "detail": "all present"
+    },
+    {
+      "check": "calibration_report",
+      "status": "PASS",
+      "detail": "2 calibration_summary files"
+    },
+    {
+      "check": "error_analysis_report",
+      "status": "PASS",
+      "detail": "1 error_analysis_summary files"
+    },
+    {
+      "check": "not_smoke_tests",
+      "status": "PASS",
+      "detail": "no epoch column to test (assumed not smoke)"
+    }
+  ],
+  "overall_pass": true,
+  "failed": [],
+  "git_commit_sha": "5c8a2bfe88e0e6103c6e8d4532c5070d15dc028e",
+  "report_csv": "results/2026-05-02/research_gate_report_20260502_081317.csv"
+}

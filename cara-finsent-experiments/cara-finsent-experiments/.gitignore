@@ -41,3 +41,6 @@ notebooks/**/*-checkpoint.ipynb
 # Local development planning notes (not for publication)
 dev_plan/
 
+# Operational secrets: GPU pod IDs, SSH endpoints, API tokens, runtime notes
+memory/
+
