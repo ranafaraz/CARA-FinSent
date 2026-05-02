@@ -1,0 +1,2 @@
+model,accuracy,macro_f1,ece_10_bins,brier_score,mean_confidence,coverage_at_60,accuracy_at_60,macro_f1_at_60,coverage_at_70,accuracy_at_70,macro_f1_at_70
+finbert_zero_shot,0.8874,0.8828,0.0768,0.1859,0.9642,0.9812,0.8959,0.8945,0.9625,0.9025,0.9034

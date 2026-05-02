@@ -1,0 +1,4 @@
+model_a,model_b,delta_macro_f1_predictions,bootstrap_ci_low,bootstrap_ci_high,p_value_or_empirical_probability,mcnemar_statistic,mcnemar_p_value,delta_macro_f1_across_seeds,cohens_d_across_seeds,stability_std_a,stability_std_b,mean_ece_a,mean_ece_b,interpretation
+finbert_agreement_weighted,finbert_zero_shot,0.0024,-0.0176,0.0232,0.766,0.3378,0.5614,0.0027,1.6879,0.0023,0.0,0.0495,0.0236,not statistically decisive (95% CI includes zero); calibration worsens for model_a vs model_b
+finbert_agreement_weighted,finbert_finetuned,0.0197,-0.0002,0.0423,0.058,3.4386,0.0627,0.0042,0.6276,0.0023,0.0092,0.0495,0.0608,not statistically decisive (95% CI includes zero)
+finbert_zero_shot,finbert_finetuned,0.0173,-0.0069,0.0415,0.156,0.8312,0.362,0.0015,0.2319,0.0,0.0092,0.0236,0.0608,not statistically decisive (95% CI includes zero)

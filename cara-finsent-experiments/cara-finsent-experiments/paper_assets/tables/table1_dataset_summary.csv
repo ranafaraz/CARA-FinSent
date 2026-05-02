@@ -1,0 +1,4 @@
+dataset,split,n,negative,neutral,positive
+Financial PhraseBank (controlled gold split),train,3353,414,2008,931
+Financial PhraseBank (controlled gold split),val,479,59,287,133
+Financial PhraseBank (controlled gold split),test,959,119,574,266

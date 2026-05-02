@@ -1,0 +1,11 @@
+experiment,model,n_seeds,macro_f1_mean,macro_f1_std,accuracy_mean,accuracy_std,ece10_mean,ece10_std,brier_mean,brier_std,best_macro_f1,best_ece
+agreement_weighted,finbert_agreement_weighted,5,0.8863,0.0023,0.8886,0.002,0.0495,0.0221,0.1713,0.0105,*,
+finbert_zero_shot,finbert_base_zero_shot_ProsusAI/finbert,5,0.8836,0.0,0.8832,0.0,0.0236,0.0,0.1762,0.0,,*
+finbert_finetuned,finbert_finetuned_ProsusAI/finbert,5,0.8821,0.0092,0.8859,0.0073,0.0608,0.024,0.181,0.0091,,
+classical,tfidf_linear_svm,6,0.6941,0.0,0.7497,0.0,,0.0,,0.0,,
+classical,tfidf_logistic_regression,6,0.6838,0.0,0.7404,0.0,0.1732,0.0,0.425,0.0,,
+classical,tfidf_sgd_log_loss,6,0.6773,0.0024,0.7472,0.0011,0.0988,0.0016,0.3777,0.0003,,
+classical,tfidf_xgboost,6,0.6216,0.0,0.7205,0.0,0.0321,0.0,0.3931,0.0,,
+classical,tfidf_random_forest,6,0.5902,0.0067,0.7179,0.003,0.0416,0.0044,0.3954,0.0009,,
+classical,tfidf_multinomial_nb,6,0.3938,0.0,0.6517,0.0,0.1056,0.0,0.4691,0.0,,
+classical,majority_baseline,6,0.2496,0.0,0.5985,0.0,0.4015,0.0,0.8029,0.0,,

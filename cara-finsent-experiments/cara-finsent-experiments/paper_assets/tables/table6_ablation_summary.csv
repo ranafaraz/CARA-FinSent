@@ -1,0 +1,4 @@
+variant,model,n_seeds,macro_f1_mean,macro_f1_std,ece10_mean,ece10_std,brier_mean,brier_std,delta_macro_f1_vs_zero_shot,delta_ece_vs_zero_shot
+agreement_weighted,finbert_agreement_weighted,5,0.8863,0.0023,0.0495,0.0221,0.1713,0.0105,0.0027,0.0259
+finbert_zero_shot,finbert_base_zero_shot_ProsusAI/finbert,5,0.8836,0.0,0.0236,0.0,0.1762,0.0,0.0,0.0
+finbert_finetuned,finbert_finetuned_ProsusAI/finbert,5,0.8821,0.0092,0.0608,0.024,0.181,0.0091,-0.0015,0.0372
