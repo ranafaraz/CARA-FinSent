@@ -1,0 +1,12 @@
+check,status,detail,timestamp_utc
+compileall,PASS,ok,20260502_110923
+controlled_gold_splits,PASS,all present,20260502_110923
+audit_gate,PASS,overall_status=PASS | leakage_status=PASS | audit_gate=PASS,20260502_110923
+finbert_label_sanity,PASS,4 mapping artifacts,20260502_110923
+min_seed_runs,PASS,classical=6; finbert_zero_shot=5; finbert_finetuned=5; agreement_weighted=5,20260502_110923
+agreement_weighted_seed_runs,PASS,"unique_seeds=5 (required 5); seeds=[13, 21, 42, 87, 101]",20260502_110923
+no_text_hash_leakage,PASS,all zero,20260502_110923
+result_metadata,PASS,all present,20260502_110923
+calibration_report,PASS,5 calibration_summary files,20260502_110923
+error_analysis_report,PASS,4 error_analysis_summary files,20260502_110923
+not_smoke_tests,PASS,max num_epochs=3.0,20260502_110923

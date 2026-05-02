@@ -1,0 +1,65 @@
+{
+  "timestamp_utc": "20260502_110923",
+  "min_seeds_required": 5,
+  "checks": [
+    {
+      "check": "compileall",
+      "status": "PASS",
+      "detail": "ok"
+    },
+    {
+      "check": "controlled_gold_splits",
+      "status": "PASS",
+      "detail": "all present"
+    },
+    {
+      "check": "audit_gate",
+      "status": "PASS",
+      "detail": "overall_status=PASS | leakage_status=PASS | audit_gate=PASS"
+    },
+    {
+      "check": "finbert_label_sanity",
+      "status": "PASS",
+      "detail": "4 mapping artifacts"
+    },
+    {
+      "check": "min_seed_runs",
+      "status": "PASS",
+      "detail": "classical=6; finbert_zero_shot=5; finbert_finetuned=5; agreement_weighted=5"
+    },
+    {
+      "check": "agreement_weighted_seed_runs",
+      "status": "PASS",
+      "detail": "unique_seeds=5 (required 5); seeds=[13, 21, 42, 87, 101]"
+    },
+    {
+      "check": "no_text_hash_leakage",
+      "status": "PASS",
+      "detail": "all zero"
+    },
+    {
+      "check": "result_metadata",
+      "status": "PASS",
+      "detail": "all present"
+    },
+    {
+      "check": "calibration_report",
+      "status": "PASS",
+      "detail": "5 calibration_summary files"
+    },
+    {
+      "check": "error_analysis_report",
+      "status": "PASS",
+      "detail": "4 error_analysis_summary files"
+    },
+    {
+      "check": "not_smoke_tests",
+      "status": "PASS",
+      "detail": "max num_epochs=3.0"
+    }
+  ],
+  "overall_pass": true,
+  "failed": [],
+  "git_commit_sha": "28f617d19cd2cd7313205d15bb9f047a00dd4a6b",
+  "report_csv": "results\\2026-05-02\\research_gate_report_20260502_110923.csv"
+}
