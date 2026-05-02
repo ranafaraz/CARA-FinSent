@@ -1,0 +1,14 @@
+{
+  "phase": "phase14_step4_clean_calibration",
+  "model_label": "aw_check",
+  "val_predictions": "results/2026-05-02/phase14_predictions/finbert_agreement_weighted_val_predictions_20260502_165409.csv",
+  "test_predictions": "results/2026-05-02/phase14_predictions/finbert_agreement_weighted_test_predictions_20260502_165409.csv",
+  "val_n": 479,
+  "test_n": 959,
+  "best_method": "aw_check_platt",
+  "best_ece_10_bins": 0.038534939797303366,
+  "temperature": 1.045258411919503,
+  "fit_rule": "val-only fit, test-only eval",
+  "git_commit_sha": "2212d22c13470974102122b6855f1efd8aa43166",
+  "generated_at_utc": "20260502_185946"
+}

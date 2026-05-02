@@ -1,0 +1,14 @@
+{
+  "id": "USERNAME/cara-finsent-phase15-aw-seed13",
+  "title": "CARA-FinSent Phase 15 AW seed=13 GPU rerun",
+  "code_file": "phase15_aw_seed13_kaggle.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "keywords": ["finbert", "sentiment", "reproducibility"]
+}
