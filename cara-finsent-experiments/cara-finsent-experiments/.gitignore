@@ -56,3 +56,13 @@ wandb/
 cara_phase8_results.tgz
 cara_phase9_results.tgz
 
+# Local scratch/output directories created during ad-hoc runs
+tmp/
+temp/
+logs/
+
+# Common local test/build caches
+.pytest_cache/
+.coverage
+htmlcov/
+
