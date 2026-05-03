@@ -1,0 +1,88 @@
+{
+  "phase": 16,
+  "git_commit_sha": "6a999be6cbba48d5dbd3e08021fddcb78ed4dfe7",
+  "generated_at_utc": "2026-05-03T06:12:29Z",
+  "package_root": "artifacts/phase16_paper_ready_evidence",
+  "files": [
+    {
+      "file": "artifacts/phase16_paper_ready_evidence/PHASE15_AW_REPRODUCIBILITY_DIAGNOSIS.md",
+      "size": 5736,
+      "sha256": "4b28655ff62f0edd0f470d885df516e9ddbf590eeaf0e9ad42210b3d2078b3c3"
+    },
+    {
+      "file": "artifacts/phase16_paper_ready_evidence/PHASE15_EXTERNAL_VALIDATION_CLAIM_BOUNDARIES.md",
+      "size": 4345,
+      "sha256": "c7454c00f9ce13e05c0c72213de19e6bcd65b1cb4dacf03a30d883228e0171fd"
+    },
+    {
+      "file": "artifacts/phase16_paper_ready_evidence/phase15_final_clean_leaderboard.csv",
+      "size": 2126,
+      "sha256": "60f5c41facc90ec22468b2451962a384febd50e5d6ddec33afe579d8ca65ec24"
+    },
+    {
+      "file": "artifacts/phase16_paper_ready_evidence/PHASE16_AGENT_COMPLETION_REPORT.md",
+      "size": 5188,
+      "sha256": "afd55e7e9efb4bc98b8bec258aa7e8097de95654270c23be7a2f6931f51f583b"
+    },
+    {
+      "file": "artifacts/phase16_paper_ready_evidence/PHASE16_AW_GPU_REPRODUCTION_REPORT.md",
+      "size": 4243,
+      "sha256": "e4b04a048496a41151f36f23f641a698ba80ab9f0e6829331d53e79d8b765980"
+    },
+    {
+      "file": "artifacts/phase16_paper_ready_evidence/phase16_aw_seed13_environment.txt",
+      "size": 18660,
+      "sha256": "fe30a51510bd73cf8246ff85d881203f174124a0a567ab39575001fa173e6bba"
+    },
+    {
+      "file": "artifacts/phase16_paper_ready_evidence/phase16_aw_seed13_gpu_train_log.txt",
+      "size": 49836,
+      "sha256": "49b07c2eeb3eb7dbfc00f31ebe4761b5f967f436dddb64ba2103711a525a141f"
+    },
+    {
+      "file": "artifacts/phase16_paper_ready_evidence/phase16_aw_seed13_manifest.json",
+      "size": 2808,
+      "sha256": "362e566617f68e9d8548436b0bf2ba6c775c6565c3ab4f0eb33845abfe74fdd1"
+    },
+    {
+      "file": "artifacts/phase16_paper_ready_evidence/phase16_aw_seed13_metrics.csv",
+      "size": 156,
+      "sha256": "24316217516986b9cf2321c6a9eed6fdd57998d84a3cc7e0a3b43bd1be059bfe"
+    },
+    {
+      "file": "artifacts/phase16_paper_ready_evidence/phase16_aw_seed13_test_predictions.csv",
+      "size": 270204,
+      "sha256": "c1e3d058b482ff58375c3e3ac5e625a59724b5b8ecaaa9bdb0cf4b93a9b20b35"
+    },
+    {
+      "file": "artifacts/phase16_paper_ready_evidence/phase16_aw_seed13_val_predictions.csv",
+      "size": 134527,
+      "sha256": "d73ed358bfd9acc7254aceca0fe7d0f3db98374dfb5089d2c220007ba875dc4d"
+    },
+    {
+      "file": "artifacts/phase16_paper_ready_evidence/phase16_final_clean_leaderboard_20260503_110917.csv",
+      "size": 2506,
+      "sha256": "2cdb383f0c3a344756b314e8300b70a6d3b69bf3faf7e7221925c755e5a1f636"
+    },
+    {
+      "file": "artifacts/phase16_paper_ready_evidence/PHASE16_FINAL_CLEAN_LEADERBOARD_UPDATE.md",
+      "size": 2077,
+      "sha256": "f51a46659332905a22cfbf4dbca13df8b3a553e1917cd503ab4dfe726e04bfa1"
+    },
+    {
+      "file": "artifacts/phase16_paper_ready_evidence/PHASE16_FINAL_PAPER_CLAIM_BOUNDARIES.md",
+      "size": 4556,
+      "sha256": "541524419c02e9bacb75bf0f65fe1da5a630ace07b36d6dfb7b20dd7b6615b83"
+    },
+    {
+      "file": "artifacts/phase16_paper_ready_evidence/PHASE16_KAGGLE_PACKAGE_AUDIT.md",
+      "size": 3919,
+      "sha256": "26b8973f06b2fe64186cca7c90c8f6aad041560aab195c19037037c496dde82c"
+    },
+    {
+      "file": "artifacts/phase16_paper_ready_evidence/PHASE16_REPO_HEAD_AUDIT.md",
+      "size": 1398,
+      "sha256": "0fe6b7ca74600631bc6a325a3ad1d2b33fa56441ff6ab8bb73d81b8eb573cc1a"
+    }
+  ]
+}

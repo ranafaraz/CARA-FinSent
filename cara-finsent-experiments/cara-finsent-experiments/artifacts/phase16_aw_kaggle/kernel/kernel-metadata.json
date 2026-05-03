@@ -1,0 +1,14 @@
+{
+  "id": "ranafarazahmed/cara-finsent-phase-16-aw-seed-13-script",
+  "title": "cara-finsent-phase-16-aw-seed-13-script",
+  "code_file": "phase16_aw_seed13.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": ["ranafarazahmed/cara-finsent-phase16-aw-bundle"],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "keywords": ["finbert", "sentiment", "reproducibility"]
+}
